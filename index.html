@@ -1,0 +1,1036 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDF Document Translator</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 28px;
+            margin-bottom: 10px;
+            font-weight: 600;
+        }
+        
+        .header p {
+            opacity: 0.9;
+            font-size: 16px;
+        }
+        
+        .main-content {
+            display: flex;
+            min-height: 600px;
+        }
+        
+        .upload-section {
+            flex: 1;
+            padding: 40px;
+            border-right: 1px solid #e0e0e0;
+            background: #f8f9fa;
+        }
+        
+        .display-section {
+            flex: 2;
+            padding: 40px;
+            position: relative;
+        }
+        
+        .upload-area {
+            border: 3px dashed #667eea;
+            border-radius: 10px;
+            padding: 40px;
+            text-align: center;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            margin-bottom: 20px;
+        }
+        
+        .upload-area:hover {
+            border-color: #764ba2;
+            background: #f0f7ff;
+        }
+        
+        .upload-area.dragover {
+            border-color: #764ba2;
+            background: #e3f2fd;
+            transform: scale(1.02);
+        }
+        
+        .upload-icon {
+            font-size: 48px;
+            color: #667eea;
+            margin-bottom: 20px;
+        }
+        
+        .upload-text {
+            font-size: 18px;
+            color: #667eea;
+            margin-bottom: 10px;
+        }
+        
+        .upload-subtext {
+            font-size: 14px;
+            color: #666;
+        }
+        
+        .file-input {
+            display: none;
+        }
+        
+        .btn {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            margin: 5px;
+        }
+        
+        .btn:hover {
+            background: #764ba2;
+            transform: translateY(-2px);
+            color: white;
+        }
+        
+        .btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .btn-success {
+            background: #667eea;
+        }
+        
+        .btn-success:hover {
+            background: #764ba2;
+        }
+        
+        .processing {
+            text-align: center;
+            padding: 40px;
+        }
+        
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .document-display {
+            border: 1px solid #e0e0e0;
+            border-radius: 10px;
+            padding: 40px;
+            background: white;
+            font-family: 'Georgia', 'Times New Roman', serif;
+            font-size: 15px;
+            line-height: 1.7;
+            white-space: normal;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            max-height: 700px;
+            overflow-y: auto;
+            word-wrap: break-word;
+            text-align: left;
+            color: #333;
+        }
+        
+        .document-display h1, .document-display h2, .document-display h3 {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        .document-display table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 15px 0;
+            font-size: 14px;
+        }
+        
+        .document-display th, .document-display td {
+            border: 1px solid #ddd;
+            padding: 8px 12px;
+            text-align: left;
+        }
+        
+        .document-display th {
+            background-color: #f8f9fa;
+            font-weight: 600;
+        }
+        
+        .document-display.editable {
+            background-color: #fffde7;
+            outline: 2px solid #667eea;
+            padding: 20px;
+            font-family: 'Courier New', monospace;
+        }
+        
+        .document-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+        
+        .document-info {
+            flex: 1;
+        }
+        
+        .document-info h3 {
+            color: #667eea;
+            margin-bottom: 5px;
+        }
+        
+        .document-info p {
+            color: #666;
+            font-size: 14px;
+        }
+        
+        .download-actions {
+            display: flex;
+            gap: 10px;
+        }
+        
+        .edit-actions {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        
+        .toggle-edit-btn {
+            display: flex;
+            align-items: center;
+            background: linear-gradient(135deg, #ff9800 0%, #ff5722 100%);
+        }
+        
+        .toggle-edit-btn:hover {
+            box-shadow: 0 8px 25px rgba(255, 152, 0, 0.3);
+        }
+        
+        .save-edits-btn {
+            display: flex;
+            align-items: center;
+            background: linear-gradient(135deg, #4caf50 0%, #2e7d32 100%);
+        }
+        
+        .save-edits-btn:hover {
+            box-shadow: 0 8px 25px rgba(76, 175, 80, 0.3);
+        }
+        
+        .cancel-edits-btn {
+            display: flex;
+            align-items: center;
+            background: linear-gradient(135deg, #f44336 0%, #c62828 100%);
+        }
+        
+        .cancel-edits-btn:hover {
+            box-shadow: 0 8px 25px rgba(244, 67, 54, 0.3);
+        }
+        
+        .status-message {
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-weight: 500;
+        }
+        
+        .status-success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .status-error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .file-info {
+            background: #e9ecef;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        
+        .file-info h4 {
+            color: #495057;
+            margin-bottom: 10px;
+        }
+        
+        .info-item {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 5px;
+            font-size: 14px;
+        }
+        
+        .info-label {
+            font-weight: 500;
+            color: #495057;
+        }
+        
+        .info-value {
+            color: #6c757d;
+        }
+        
+        .language-controls {
+            margin-bottom: 20px;
+        }
+        
+        .language-controls label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #495057;
+        }
+        
+        .language-controls select {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+        }
+        
+        .language-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 15px;
+            font-size: 12px;
+            font-weight: 500;
+            margin-left: 10px;
+        }
+        
+        .badge-english {
+            background: #e3f2fd;
+            color: #1565c0;
+        }
+        
+        .badge-hindi {
+            background: #fff3e0;
+            color: #ef6c00;
+        }
+        
+        @media (max-width: 768px) {
+            .main-content {
+                flex-direction: column;
+            }
+            
+            .upload-section {
+                border-right: none;
+                border-bottom: 1px solid #e0e0e0;
+            }
+            
+            .document-header {
+                flex-direction: column;
+                gap: 15px;
+            }
+            
+            .download-actions {
+                justify-content: center;
+            }
+            
+            .edit-actions {
+                justify-content: center;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📄 PDF Document Translator</h1>
+            <p>Translate PDF documents between English and Hindi while preserving formatting</p>
+        </div>
+        
+        <div class="main-content">
+            <div class="upload-section">
+                <div class="upload-area" id="uploadArea">
+                    <div class="upload-icon">📄</div>
+                    <div class="upload-text">Drop PDF document here</div>
+                    <div class="upload-subtext">or click to browse files • Max 15MB</div>
+                    <input type="file" id="fileInput" class="file-input" accept=".pdf">
+                </div>
+                
+                <div class="language-controls">
+                    <label for="targetLang">Translation Direction:</label>
+                    <select id="targetLang">
+                        <option value="hi">English → Hindi (अंग्रेज़ी → हिंदी)</option>
+                        <option value="en">Hindi → English (हिंदी → अंग्रेज़ी)</option>
+                    </select>
+                </div>
+                
+                <button class="btn" id="processBtn" disabled>Translate Document</button>
+                
+                <div id="fileInfo" class="file-info" style="display: none;">
+                    <h4>📋 Selected File</h4>
+                    <div class="info-item">
+                        <span class="info-label">Name:</span>
+                        <span class="info-value" id="fileName"></span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Size:</span>
+                        <span class="info-value" id="fileSize"></span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Type:</span>
+                        <span class="info-value" id="fileType"></span>
+                    </div>
+                </div>
+                
+                <div id="statusMessage" style="display: none;"></div>
+            </div>
+            
+            <div class="display-section">
+                <div id="welcomeMessage">
+                    <div style="text-align: center; padding: 60px 20px; color: #666;">
+                        <div style="font-size: 64px; margin-bottom: 20px;">🌐</div>
+                        <h2 style="margin-bottom: 15px; color: #667eea;">Welcome to PDF Translator</h2>
+                        <p style="font-size: 16px; line-height: 1.6;">
+                            Upload your PDF document to get started.<br>
+                            We'll translate it while preserving the original formatting.
+                        </p>
+                        <div style="margin-top: 30px; padding: 20px; background: #f8f9fa; border-radius: 10px;">
+                            <h4 style="color: #495057; margin-bottom: 15px;">Supported Features:</h4>
+                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px; text-align: left;">
+                                <div>✅ English ↔ Hindi translation</div>
+                                <div>✅ Format preservation</div>
+                                <div>✅ Table structure maintained</div>
+                                <div>✅ PDF & TXT download</div>
+                                <div>✅ Document editing</div>
+                                <div>✅ Professional output</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div id="processingState" style="display: none;">
+                    <div class="processing">
+                        <div class="spinner"></div>
+                        <h3 id="processingTitle">Translating your document...</h3>
+                        <p id="processingMessage">Please wait while we process and translate your PDF.</p>
+                        <div style="margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px; text-align: left;">
+                            <div style="font-size: 14px; color: #666; margin-bottom: 10px;">Processing Steps:</div>
+                            <div id="step1" style="margin: 5px 0; color: #667eea;">📄 Uploading document...</div>
+                            <div id="step2" style="margin: 5px 0; color: #ccc;">🤖 AI extraction and translation...</div>
+                            <div id="step3" style="margin: 5px 0; color: #ccc;">✨ Formatting and display...</div>
+                        </div>
+                        <div style="margin-top: 15px; font-size: 12px; color: #999;">
+                            This may take 15-40 seconds for typical documents
+                        </div>
+                    </div>
+                </div>
+                
+                <div id="documentResult" style="display: none;">
+                    <div class="document-header">
+                        <div class="document-info">
+                            <h3>📋 Translated Document</h3>
+                            <p id="documentStats">Ready for download and editing</p>
+                        </div>
+                        <div class="edit-actions">
+                            <button class="btn toggle-edit-btn" id="toggleEditBtn">✏️ Edit Document</button>
+                            <button class="btn save-edits-btn" id="saveEditsBtn" style="display:none;">💾 Save Changes</button>
+                            <button class="btn cancel-edits-btn" id="cancelEditsBtn" style="display:none;">❌ Cancel</button>
+                        </div>
+                        <div class="download-actions">
+                            <button class="btn btn-success" id="downloadPdfBtn">📥 Download PDF</button>
+                            <button class="btn" id="downloadTxtBtn">📄 Download TXT</button>
+                        </div>
+                    </div>
+                    <div class="document-display" id="documentContent" contenteditable="false"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        class PDFTranslator {
+            constructor() {
+                this.selectedFile = null;
+                this.processedDocument = null;
+                this.originalDocumentText = null;
+                this.isEditMode = false;
+                this.initializeEventListeners();
+            }
+            
+            initializeEventListeners() {
+                const uploadArea = document.getElementById('uploadArea');
+                const fileInput = document.getElementById('fileInput');
+                const processBtn = document.getElementById('processBtn');
+                const downloadPdfBtn = document.getElementById('downloadPdfBtn');
+                const downloadTxtBtn = document.getElementById('downloadTxtBtn');
+                
+                // Edit mode buttons
+                const toggleEditBtn = document.getElementById('toggleEditBtn');
+                const saveEditsBtn = document.getElementById('saveEditsBtn');
+                const cancelEditsBtn = document.getElementById('cancelEditsBtn');
+                
+                // File upload events
+                uploadArea.addEventListener('click', () => fileInput.click());
+                uploadArea.addEventListener('dragover', this.handleDragOver.bind(this));
+                uploadArea.addEventListener('dragleave', this.handleDragLeave.bind(this));
+                uploadArea.addEventListener('drop', this.handleDrop.bind(this));
+                fileInput.addEventListener('change', this.handleFileSelect.bind(this));
+                processBtn.addEventListener('click', this.processDocument.bind(this));
+                
+                // Download events
+                downloadPdfBtn.addEventListener('click', this.downloadPDF.bind(this));
+                downloadTxtBtn.addEventListener('click', this.downloadTXT.bind(this));
+                
+                // Edit mode events
+                toggleEditBtn.addEventListener('click', this.toggleEditMode.bind(this));
+                saveEditsBtn.addEventListener('click', this.saveEdits.bind(this));
+                cancelEditsBtn.addEventListener('click', this.cancelEdits.bind(this));
+            }
+            
+            handleDragOver(e) {
+                e.preventDefault();
+                e.currentTarget.classList.add('dragover');
+            }
+            
+            handleDragLeave(e) {
+                e.preventDefault();
+                e.currentTarget.classList.remove('dragover');
+            }
+            
+            handleDrop(e) {
+                e.preventDefault();
+                e.currentTarget.classList.remove('dragover');
+                const files = e.dataTransfer.files;
+                if (files.length > 0) {
+                    this.selectFile(files[0]);
+                }
+            }
+            
+            handleFileSelect(e) {
+                const file = e.target.files[0];
+                if (file) {
+                    this.selectFile(file);
+                }
+            }
+            
+            selectFile(file) {
+                // Validate file type
+                if (file.type !== 'application/pdf') {
+                    this.showErrorMessage('Please select a PDF file.');
+                    return;
+                }
+                
+                // Validate file size (15MB limit)
+                if (file.size > 15 * 1024 * 1024) {
+                    this.showErrorMessage('File size exceeds 15MB limit. Please select a smaller file.');
+                    return;
+                }
+                
+                this.selectedFile = file;
+                this.displayFileInfo(file);
+                document.getElementById('processBtn').disabled = false;
+            }
+            
+            displayFileInfo(file) {
+                document.getElementById('fileName').textContent = file.name;
+                document.getElementById('fileSize').textContent = this.formatFileSize(file.size);
+                document.getElementById('fileType').textContent = file.type;
+                document.getElementById('fileInfo').style.display = 'block';
+            }
+            
+            formatFileSize(bytes) {
+                if (bytes === 0) return '0 Bytes';
+                const k = 1024;
+                const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+                const i = Math.floor(Math.log(bytes) / Math.log(k));
+                return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+            }
+            
+            async processDocument() {
+                if (!this.selectedFile) return;
+                
+                this.showProcessingState();
+                this.updateProcessingStep(1, 'Uploading and encoding document...');
+                
+                try {
+                    const base64File = await this.fileToBase64(this.selectedFile);
+                    
+                    this.updateProcessingStep(2, 'AI extraction and translation in progress...');
+                    const response = await this.callTranslateAPI(base64File);
+                    
+                    this.updateProcessingStep(3, 'Formatting and preparing display...');
+                    
+                    this.processedDocument = response;
+                    this.displayDocument(response.translated_document);
+                    
+                    const processingTime = response.processing_time ? `${response.processing_time.toFixed(1)}s` : '';
+                    const detectedLang = response.detected_language || 'Unknown';
+                    const targetLang = response.target_language || 'Unknown';
+                    const wordCount = response.translated_document.trim().split(/\s+/).length;
+                    
+                    this.showSuccessMessage(
+                        `Document translated successfully! ${detectedLang} → ${targetLang} • ${wordCount.toLocaleString()} words ${processingTime ? `• ${processingTime}` : ''}`
+                    );
+                    
+                } catch (error) {
+                    console.error('Processing error:', error);
+                    
+                    // Show more specific error messages
+                    let errorMessage = 'Failed to translate document';
+                    if (error.message.includes('timeout')) {
+                        errorMessage = 'Translation timed out. Please try with a smaller document or try again later.';
+                    } else if (error.message.includes('size')) {
+                        errorMessage = 'Document is too large. Please use a smaller PDF (under 15MB).';
+                    } else if (error.message.includes('format')) {
+                        errorMessage = 'Invalid document format. Please ensure you\'re uploading a valid PDF file.';
+                    } else {
+                        errorMessage += ': ' + error.message;
+                    }
+                    
+                    this.showErrorMessage(errorMessage);
+                    this.showWelcomeState();
+                }
+            }
+            
+            updateProcessingStep(step, message) {
+                // Update step colors and messages
+                for (let i = 1; i <= 3; i++) {
+                    const stepElement = document.getElementById(`step${i}`);
+                    if (i < step) {
+                        stepElement.style.color = '#28a745'; // Green for completed
+                        stepElement.innerHTML = stepElement.innerHTML.replace(/📄|🤖|✨/, '✅');
+                    } else if (i === step) {
+                        stepElement.style.color = '#667eea'; // Blue for current
+                        if (i === 2) {
+                            stepElement.innerHTML = `🤖 ${message}`;
+                        }
+                    } else {
+                        stepElement.style.color = '#ccc'; // Gray for pending
+                    }
+                }
+            }
+            
+            async fileToBase64(file) {
+                return new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = () => {
+                        try {
+                            const base64 = reader.result.split(',')[1];
+                            if (!base64) {
+                                throw new Error('Failed to extract base64 data');
+                            }
+                            resolve(base64);
+                        } catch (error) {
+                            reject(error);
+                        }
+                    };
+                    reader.onerror = () => reject(new Error('File reading failed'));
+                    reader.readAsDataURL(file);
+                });
+            }
+            
+            async callTranslateAPI(base64File) {
+                const targetLang = document.getElementById('targetLang').value;
+                
+                const payload = {
+                    body: base64File,
+                    target_lang: targetLang,
+                    template_choice: 'simplified'
+                };
+                
+                const response = await fetch('/translate', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(payload)
+                });
+                
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.detail || 'Translation failed');
+                }
+                
+                const result = await response.json();
+                
+                if (!result.success) {
+                    throw new Error(result.message || 'Unknown error occurred');
+                }
+                
+                // Check if translation seems incomplete
+                this.checkTranslationCompleteness(result.translated_document);
+                
+                return result;
+            }
+            
+            checkTranslationCompleteness(translatedText) {
+                const textLength = translatedText.length;
+                const wordCount = translatedText.trim().split(/\s+/).length;
+                
+                // Basic heuristics to detect incomplete translations
+                const seemsIncomplete = (
+                    textLength < 200 ||  // Very short translation
+                    wordCount < 50 ||    // Very few words
+                    translatedText.endsWith('...') ||  // Ends with ellipsis
+                    translatedText.includes('[truncated]') ||  // Contains truncation markers
+                    !translatedText.trim().endsWith('.') && !translatedText.trim().endsWith('।')  // Doesn't end properly
+                );
+                
+                if (seemsIncomplete) {
+                    console.warn('Translation may be incomplete:', {
+                        length: textLength,
+                        words: wordCount,
+                        preview: translatedText.substring(0, 100) + '...'
+                    });
+                    
+                    // Show warning to user
+                    setTimeout(() => {
+                        this.showWarningMessage(
+                            'The translation may be incomplete. If the document seems cut off, try uploading a smaller PDF or contact support.'
+                        );
+                    }, 1000);
+                }
+            }
+            
+            showWarningMessage(message) {
+                const statusDiv = document.getElementById('statusMessage');
+                statusDiv.className = 'status-message';
+                statusDiv.style.background = '#fff3cd';
+                statusDiv.style.color = '#856404';
+                statusDiv.style.border = '1px solid #ffeaa7';
+                statusDiv.textContent = '⚠️ ' + message;
+                statusDiv.style.display = 'block';
+            }
+            
+            toggleEditMode() {
+                const documentContent = document.getElementById('documentContent');
+                const toggleEditBtn = document.getElementById('toggleEditBtn');
+                const saveEditsBtn = document.getElementById('saveEditsBtn');
+                const cancelEditsBtn = document.getElementById('cancelEditsBtn');
+                
+                if (!this.isEditMode) {
+                    // Enable edit mode - switch to plain text for editing
+                    this.isEditMode = true;
+                    this.originalDocumentText = this.processedDocument.translated_document;
+                    documentContent.innerHTML = '';
+                    documentContent.textContent = this.originalDocumentText;
+                    documentContent.contentEditable = true;
+                    documentContent.classList.add('editable');
+                    toggleEditBtn.style.display = 'none';
+                    saveEditsBtn.style.display = 'block';
+                    cancelEditsBtn.style.display = 'block';
+                    
+                    this.showSuccessMessage('You can now edit the document. Click "Save Changes" when done.');
+                    documentContent.focus();
+                }
+            }
+            
+            saveEdits() {
+                const documentContent = document.getElementById('documentContent');
+                const toggleEditBtn = document.getElementById('toggleEditBtn');
+                const saveEditsBtn = document.getElementById('saveEditsBtn');
+                const cancelEditsBtn = document.getElementById('cancelEditsBtn');
+                
+                // Save edited content
+                const editedText = documentContent.textContent;
+                this.processedDocument.translated_document = editedText;
+                
+                // Disable edit mode and reformat for display
+                this.isEditMode = false;
+                documentContent.contentEditable = false;
+                documentContent.classList.remove('editable');
+                
+                // Re-apply formatting to the edited content
+                const formattedText = this.formatDocumentText(editedText);
+                documentContent.innerHTML = formattedText;
+                
+                toggleEditBtn.style.display = 'block';
+                saveEditsBtn.style.display = 'none';
+                cancelEditsBtn.style.display = 'none';
+                
+                this.showSuccessMessage('Your changes have been saved.');
+            }
+            
+            cancelEdits() {
+                const documentContent = document.getElementById('documentContent');
+                const toggleEditBtn = document.getElementById('toggleEditBtn');
+                const saveEditsBtn = document.getElementById('saveEditsBtn');
+                const cancelEditsBtn = document.getElementById('cancelEditsBtn');
+                
+                // Revert to original content and reformat for display
+                const formattedText = this.formatDocumentText(this.originalDocumentText);
+                documentContent.innerHTML = formattedText;
+                
+                // Disable edit mode
+                this.isEditMode = false;
+                documentContent.contentEditable = false;
+                documentContent.classList.remove('editable');
+                toggleEditBtn.style.display = 'block';
+                saveEditsBtn.style.display = 'none';
+                cancelEditsBtn.style.display = 'none';
+                
+                this.showSuccessMessage('Changes discarded. Reverted to original document.');
+            }
+            
+            displayDocument(documentText) {
+                const documentContent = document.getElementById('documentContent');
+                
+                // Format the document text for better display
+                const formattedText = this.formatDocumentText(documentText);
+                documentContent.innerHTML = formattedText;
+                
+                // Update document statistics
+                this.updateDocumentStats(documentText);
+                
+                this.originalDocumentText = documentText;
+                this.showDocumentResult();
+                
+                // Reset edit mode when displaying a new document
+                this.isEditMode = false;
+                documentContent.contentEditable = false;
+                documentContent.classList.remove('editable');
+                document.getElementById('toggleEditBtn').style.display = 'block';
+                document.getElementById('saveEditsBtn').style.display = 'none';
+                document.getElementById('cancelEditsBtn').style.display = 'none';
+            }
+            
+            updateDocumentStats(text) {
+                const charCount = text.length;
+                const wordCount = text.trim().split(/\s+/).length;
+                const lineCount = text.split('\n').length;
+                
+                const statsElement = document.getElementById('documentStats');
+                const targetLang = document.getElementById('targetLang').value;
+                const langName = targetLang === 'hi' ? 'Hindi' : 'English';
+                
+                statsElement.innerHTML = `
+                    Translated to ${langName} • 
+                    ${charCount.toLocaleString()} characters • 
+                    ${wordCount.toLocaleString()} words • 
+                    ${lineCount} lines
+                `;
+            }
+            
+            formatDocumentText(text) {
+                if (!text || text.trim().length === 0) {
+                    return '<p style="color: #999; font-style: italic;">No content to display</p>';
+                }
+                
+                // Clean up the text first
+                let cleanText = text
+                    // Remove excessive whitespace and empty lines
+                    .replace(/\n\s*\n\s*\n/g, '\n\n')
+                    // Remove scattered single characters or numbers on their own lines
+                    .replace(/^\s*[0-9]\s*$/gm, '')
+                    // Remove lines with only special characters
+                    .replace(/^[\s\-_=|]+$/gm, '')
+                    // Clean up spacing around headers
+                    .replace(/\n+(#{1,3}\s)/g, '\n\n$1')
+                    .trim();
+                
+                // Basic markdown-like formatting for better display
+                let formatted = cleanText
+                    // Escape HTML first to prevent XSS
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    
+                    // Convert markdown headers with better styling
+                    .replace(/^# (.+)$/gm, '<h1 style="color: #667eea; margin: 25px 0 20px 0; font-size: 26px; font-weight: 700; border-bottom: 2px solid #667eea; padding-bottom: 10px;">$1</h1>')
+                    .replace(/^## (.+)$/gm, '<h2 style="color: #667eea; margin: 20px 0 15px 0; font-size: 22px; font-weight: 600; border-left: 4px solid #667eea; padding-left: 15px;">$1</h2>')
+                    .replace(/^### (.+)$/gm, '<h3 style="color: #495057; margin: 18px 0 12px 0; font-size: 18px; font-weight: 600;">$1</h3>')
+                    
+                    // Convert bold text with better styling
+                    .replace(/\*\*(.+?)\*\*/g, '<strong style="color: #495057; font-weight: 700; background: #f8f9fa; padding: 2px 4px; border-radius: 3px;">$1</strong>')
+                    
+                    // Convert numbered lists with better formatting
+                    .replace(/^(\d+\.\s.+)$/gm, '<div style="margin: 10px 0; padding: 8px 0 8px 30px; text-indent: -20px; border-left: 2px solid #e9ecef; padding-left: 25px;">$1</div>')
+                    
+                    // Convert lettered lists (a), b), c))
+                    .replace(/^([a-z]\)\s.+)$/gm, '<div style="margin: 8px 0; padding-left: 40px; text-indent: -20px; color: #495057;">$1</div>')
+                    
+                    // Convert bullet points with better styling
+                    .replace(/^[•\-]\s(.+)$/gm, '<div style="margin: 8px 0; padding-left: 30px; text-indent: -15px; color: #495057;">• $1</div>')
+                    
+                    // Handle table-like structures - convert to proper HTML tables
+                    .replace(/^(\|.+\|)$/gm, (match) => {
+                        const cells = match.split('|').filter(cell => cell.trim() !== '');
+                        const formattedCells = cells.map(cell => `<td style="border: 1px solid #ddd; padding: 8px;">${cell.trim()}</td>`).join('');
+                        return `<table style="width: 100%; border-collapse: collapse; margin: 10px 0;"><tr>${formattedCells}</tr></table>`;
+                    })
+                    
+                    // Handle horizontal rules/separators
+                    .replace(/^[-=]{3,}$/gm, '<hr style="margin: 20px 0; border: none; border-top: 2px solid #e9ecef;">')
+                    
+                    // Convert line breaks to proper spacing
+                    .replace(/\n\n/g, '</p><p style="margin: 15px 0; text-align: justify; line-height: 1.7; color: #495057;">')
+                    .replace(/\n/g, '<br>');
+                
+                // Wrap in paragraph tags
+                formatted = '<div style="font-family: Georgia, serif; font-size: 15px;"><p style="margin: 15px 0; text-align: justify; line-height: 1.7; color: #495057;">' + formatted + '</p></div>';
+                
+                // Clean up empty paragraphs and fix spacing
+                formatted = formatted
+                    .replace(/<p[^>]*>\s*<\/p>/g, '')
+                    .replace(/<p[^>]*>\s*<br>\s*<\/p>/g, '')
+                    .replace(/(<\/h[1-3]>)\s*<p[^>]*>\s*<br>/g, '$1<p style="margin: 15px 0; text-align: justify; line-height: 1.7; color: #495057;">')
+                    .replace(/(<\/div>)\s*<p[^>]*>\s*<br>/g, '$1<p style="margin: 15px 0; text-align: justify; line-height: 1.7; color: #495057;">');
+                
+                return formatted;
+            }
+            
+            downloadPDF() {
+                if (!this.processedDocument) return;
+                
+                try {
+                    const { jsPDF } = window.jspdf;
+                    const doc = new jsPDF('p', 'mm', 'a4');
+                    
+                    // Set font and size
+                    doc.setFont('courier', 'normal');
+                    doc.setFontSize(10);
+                    
+                    // Get the current document content (which may have been edited)
+                    const currentDocumentText = this.processedDocument.translated_document;
+                    
+                    // Split text into lines that fit the page width
+                    const pageWidth = doc.internal.pageSize.getWidth();
+                    const margin = 15;
+                    const maxLineWidth = pageWidth - (margin * 2);
+                    const lines = doc.splitTextToSize(currentDocumentText, maxLineWidth);
+                    
+                    // Add text to PDF with page breaks
+                    let yPosition = margin;
+                    const lineHeight = 4;
+                    const pageHeight = doc.internal.pageSize.getHeight();
+                    
+                    lines.forEach(line => {
+                        if (yPosition + lineHeight > pageHeight - margin) {
+                            doc.addPage();
+                            yPosition = margin;
+                        }
+                        doc.text(line, margin, yPosition);
+                        yPosition += lineHeight;
+                    });
+                    
+                    // Generate filename
+                    const targetLang = document.getElementById('targetLang').value;
+                    const langLabel = targetLang === 'hi' ? 'hindi' : 'english';
+                    const fileName = `${this.selectedFile.name.replace('.pdf', '')}_${langLabel}.pdf`;
+                    doc.save(fileName);
+                    
+                } catch (error) {
+                    this.showErrorMessage('Failed to generate PDF: ' + error.message);
+                }
+            }
+            
+            downloadTXT() {
+                if (!this.processedDocument) return;
+                
+                try {
+                    // Get the current document content (which may have been edited)
+                    const currentDocumentText = this.processedDocument.translated_document;
+                    const blob = new Blob([currentDocumentText], { type: 'text/plain;charset=utf-8' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    
+                    const targetLang = document.getElementById('targetLang').value;
+                    const langLabel = targetLang === 'hi' ? 'hindi' : 'english';
+                    a.download = `${this.selectedFile.name.replace('.pdf', '')}_${langLabel}.txt`;
+                    
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                    
+                } catch (error) {
+                    this.showErrorMessage('Failed to download text file: ' + error.message);
+                }
+            }
+            
+            showProcessingState() {
+                document.getElementById('welcomeMessage').style.display = 'none';
+                document.getElementById('documentResult').style.display = 'none';
+                document.getElementById('processingState').style.display = 'block';
+            }
+            
+            showDocumentResult() {
+                document.getElementById('welcomeMessage').style.display = 'none';
+                document.getElementById('processingState').style.display = 'none';
+                document.getElementById('documentResult').style.display = 'block';
+            }
+            
+            showWelcomeState() {
+                document.getElementById('processingState').style.display = 'none';
+                document.getElementById('documentResult').style.display = 'none';
+                document.getElementById('welcomeMessage').style.display = 'block';
+            }
+            
+            showSuccessMessage(message) {
+                const statusDiv = document.getElementById('statusMessage');
+                statusDiv.className = 'status-message status-success';
+                statusDiv.textContent = message;
+                statusDiv.style.display = 'block';
+                setTimeout(() => {
+                    statusDiv.style.display = 'none';
+                }, 5000);
+            }
+            
+            showErrorMessage(message) {
+                const statusDiv = document.getElementById('statusMessage');
+                statusDiv.className = 'status-message status-error';
+                statusDiv.textContent = message;
+                statusDiv.style.display = 'block';
+            }
+        }
+        
+        // Initialize the application
+        document.addEventListener('DOMContentLoaded', () => {
+            new PDFTranslator();
+        });
+    </script>
+</body>
+</html>
