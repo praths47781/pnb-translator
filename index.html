@@ -3,542 +3,799 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PDF Document Translator</title>
+    <title>PNB Document Translation Service</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
+        :root {
+            --primary-color: #1e40af;
+            --primary-dark: #1e3a8a;
+            --secondary-color: #f8fafc;
+            --accent-color: #3b82f6;
+            --success-color: #10b981;
+            --warning-color: #f59e0b;
+            --error-color: #ef4444;
+            --text-primary: #1f2937;
+            --text-secondary: #6b7280;
+            --border-color: #e5e7eb;
+            --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+            --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+            --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+            --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+        }
+
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
         }
-        
+
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+            color: var(--text-primary);
+            line-height: 1.6;
             min-height: 100vh;
-            padding: 20px;
         }
-        
-        .container {
+
+        .header {
+            background: white;
+            border-bottom: 1px solid var(--border-color);
+            box-shadow: var(--shadow-sm);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .header-content {
             max-width: 1200px;
             margin: 0 auto;
-            background: white;
-            border-radius: 15px;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
-            overflow: hidden;
+            padding: 1rem 2rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
         }
-        
-        .header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .logo-icon {
+            width: 40px;
+            height: 40px;
+            background: var(--primary-color);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
             color: white;
-            padding: 30px;
-            text-align: center;
-        }
-        
-        .header h1 {
-            font-size: 28px;
-            margin-bottom: 10px;
+            font-size: 1.25rem;
             font-weight: 600;
         }
-        
-        .header p {
-            opacity: 0.9;
-            font-size: 16px;
+
+        .logo-text {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--text-primary);
         }
-        
-        .main-content {
+
+        .logo-subtitle {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+            font-weight: 400;
+        }
+
+        .status-indicator {
             display: flex;
-            min-height: 600px;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 1rem;
+            background: var(--success-color);
+            color: white;
+            border-radius: 20px;
+            font-size: 0.875rem;
+            font-weight: 500;
         }
-        
-        .upload-section {
-            flex: 1;
-            padding: 40px;
-            border-right: 1px solid #e0e0e0;
-            background: #f8f9fa;
+
+        .main-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+            display: grid;
+            grid-template-columns: 1fr 2fr;
+            gap: 2rem;
+            min-height: calc(100vh - 80px);
         }
-        
-        .display-section {
-            flex: 2;
-            padding: 40px;
-            position: relative;
+
+        .upload-panel {
+            background: white;
+            border-radius: 12px;
+            box-shadow: var(--shadow-lg);
+            padding: 2rem;
+            height: fit-content;
+            position: sticky;
+            top: 100px;
         }
-        
+
+        .panel-header {
+            margin-bottom: 1.5rem;
+        }
+
+        .panel-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 0.5rem;
+        }
+
+        .panel-subtitle {
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+        }
+
         .upload-area {
-            border: 3px dashed #667eea;
-            border-radius: 10px;
-            padding: 40px;
+            border: 2px dashed var(--border-color);
+            border-radius: 8px;
+            padding: 2rem;
             text-align: center;
             transition: all 0.3s ease;
             cursor: pointer;
-            margin-bottom: 20px;
+            margin-bottom: 1.5rem;
+            background: var(--secondary-color);
         }
-        
+
         .upload-area:hover {
-            border-color: #764ba2;
-            background: #f0f7ff;
+            border-color: var(--accent-color);
+            background: #eff6ff;
         }
-        
+
         .upload-area.dragover {
-            border-color: #764ba2;
-            background: #e3f2fd;
+            border-color: var(--primary-color);
+            background: #dbeafe;
             transform: scale(1.02);
         }
-        
+
         .upload-icon {
-            font-size: 48px;
-            color: #667eea;
-            margin-bottom: 20px;
+            font-size: 3rem;
+            color: var(--accent-color);
+            margin-bottom: 1rem;
         }
-        
+
         .upload-text {
-            font-size: 18px;
-            color: #667eea;
-            margin-bottom: 10px;
+            font-size: 1.125rem;
+            font-weight: 500;
+            color: var(--text-primary);
+            margin-bottom: 0.5rem;
         }
-        
+
         .upload-subtext {
-            font-size: 14px;
-            color: #666;
+            color: var(--text-secondary);
+            font-size: 0.875rem;
         }
-        
+
         .file-input {
             display: none;
         }
-        
-        .btn {
-            background: #667eea;
-            color: white;
-            border: none;
-            padding: 12px 24px;
-            border-radius: 25px;
-            cursor: pointer;
-            font-size: 16px;
+
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        .form-label {
+            display: block;
             font-weight: 500;
-            transition: all 0.3s ease;
-            margin: 5px;
+            color: var(--text-primary);
+            margin-bottom: 0.5rem;
+            font-size: 0.875rem;
         }
-        
-        .btn:hover {
-            background: #764ba2;
-            transform: translateY(-2px);
+
+        .form-select {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            font-size: 0.875rem;
+            background: white;
+            transition: border-color 0.2s ease;
+        }
+
+        .form-select:focus {
+            outline: none;
+            border-color: var(--accent-color);
+            box-shadow: 0 0 0 3px rgb(59 130 246 / 0.1);
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 6px;
+            font-size: 0.875rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-decoration: none;
+            min-height: 44px;
+        }
+
+        .btn-primary {
+            background: var(--primary-color);
             color: white;
         }
-        
+
+        .btn-primary:hover:not(:disabled) {
+            background: var(--primary-dark);
+            transform: translateY(-1px);
+            box-shadow: var(--shadow-md);
+        }
+
+        .btn-secondary {
+            background: white;
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
+        }
+
+        .btn-secondary:hover:not(:disabled) {
+            background: var(--secondary-color);
+        }
+
+        .btn-success {
+            background: var(--success-color);
+            color: white;
+        }
+
+        .btn-success:hover:not(:disabled) {
+            background: #059669;
+        }
+
         .btn:disabled {
-            background: #ccc;
+            opacity: 0.5;
             cursor: not-allowed;
             transform: none;
         }
-        
-        .btn-success {
-            background: #667eea;
+
+        .btn-full {
+            width: 100%;
         }
-        
-        .btn-success:hover {
-            background: #764ba2;
+
+        .file-info {
+            background: var(--secondary-color);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 1.5rem;
         }
-        
-        .processing {
+
+        .file-info-header {
+            font-weight: 500;
+            color: var(--text-primary);
+            margin-bottom: 0.75rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .file-info-item {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 0.5rem;
+            font-size: 0.875rem;
+        }
+
+        .file-info-label {
+            color: var(--text-secondary);
+        }
+
+        .file-info-value {
+            font-weight: 500;
+            color: var(--text-primary);
+        }
+
+        .content-panel {
+            background: white;
+            border-radius: 12px;
+            box-shadow: var(--shadow-lg);
+            overflow: hidden;
+        }
+
+        .content-header {
+            padding: 1.5rem 2rem;
+            border-bottom: 1px solid var(--border-color);
+            background: var(--secondary-color);
+        }
+
+        .content-title {
+            font-size: 1.125rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 0.5rem;
+        }
+
+        .content-subtitle {
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+        }
+
+        .content-body {
+            padding: 2rem;
+            min-height: 400px;
+        }
+
+        .welcome-state {
             text-align: center;
-            padding: 40px;
+            padding: 3rem 2rem;
+            color: var(--text-secondary);
         }
-        
+
+        .welcome-icon {
+            font-size: 4rem;
+            margin-bottom: 1.5rem;
+            color: var(--accent-color);
+        }
+
+        .welcome-title {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 1rem;
+        }
+
+        .welcome-text {
+            font-size: 1rem;
+            line-height: 1.6;
+            margin-bottom: 2rem;
+        }
+
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-top: 2rem;
+        }
+
+        .feature-item {
+            padding: 1rem;
+            background: var(--secondary-color);
+            border-radius: 8px;
+            text-align: left;
+        }
+
+        .feature-icon {
+            color: var(--success-color);
+            margin-right: 0.5rem;
+        }
+
+        .processing-state {
+            text-align: center;
+            padding: 3rem 2rem;
+        }
+
         .spinner {
-            border: 4px solid #f3f3f3;
-            border-top: 4px solid #667eea;
+            width: 60px;
+            height: 60px;
+            border: 4px solid var(--border-color);
+            border-top: 4px solid var(--primary-color);
             border-radius: 50%;
-            width: 50px;
-            height: 50px;
             animation: spin 1s linear infinite;
-            margin: 0 auto 20px;
+            margin: 0 auto 2rem;
         }
-        
+
         @keyframes spin {
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
-        
-        .document-display {
-            border: 1px solid #e0e0e0;
-            border-radius: 10px;
-            padding: 40px;
-            background: white;
-            font-family: 'Georgia', 'Times New Roman', serif;
-            font-size: 15px;
-            line-height: 1.7;
-            white-space: normal;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-            max-height: 700px;
-            overflow-y: auto;
-            word-wrap: break-word;
+
+        .processing-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 0.5rem;
+        }
+
+        .processing-subtitle {
+            color: var(--text-secondary);
+            margin-bottom: 2rem;
+        }
+
+        .progress-steps {
+            background: var(--secondary-color);
+            border-radius: 8px;
+            padding: 1.5rem;
             text-align: left;
-            color: #333;
+            max-width: 400px;
+            margin: 0 auto;
         }
-        
+
+        .progress-step {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            margin-bottom: 0.75rem;
+            font-size: 0.875rem;
+        }
+
+        .progress-step:last-child {
+            margin-bottom: 0;
+        }
+
+        .step-icon {
+            width: 20px;
+            text-align: center;
+        }
+
+        .step-complete {
+            color: var(--success-color);
+        }
+
+        .step-current {
+            color: var(--primary-color);
+        }
+
+        .step-pending {
+            color: var(--text-secondary);
+        }
+
+        .document-display {
+            font-family: 'Georgia', serif;
+            line-height: 1.7;
+            color: var(--text-primary);
+        }
+
         .document-display h1, .document-display h2, .document-display h3 {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-family: 'Inter', sans-serif;
+            margin-top: 1.5rem;
+            margin-bottom: 1rem;
         }
-        
+
+        .document-display h1 {
+            font-size: 1.5rem;
+            color: var(--primary-color);
+            border-bottom: 2px solid var(--primary-color);
+            padding-bottom: 0.5rem;
+        }
+
+        .document-display h2 {
+            font-size: 1.25rem;
+            color: var(--text-primary);
+        }
+
+        .document-display p {
+            margin-bottom: 1rem;
+            text-align: justify;
+        }
+
         .document-display table {
             width: 100%;
             border-collapse: collapse;
-            margin: 15px 0;
-            font-size: 14px;
+            margin: 1rem 0;
+            font-size: 0.875rem;
         }
-        
+
         .document-display th, .document-display td {
-            border: 1px solid #ddd;
-            padding: 8px 12px;
+            border: 1px solid var(--border-color);
+            padding: 0.75rem;
             text-align: left;
         }
-        
+
         .document-display th {
-            background-color: #f8f9fa;
+            background: var(--secondary-color);
             font-weight: 600;
         }
-        
-        .document-display.editable {
-            background-color: #fffde7;
-            outline: 2px solid #667eea;
-            padding: 20px;
-            font-family: 'Courier New', monospace;
-        }
-        
-        .document-header {
+
+        .result-header {
             display: flex;
             justify-content: space-between;
-            align-items: center;
-            margin-bottom: 20px;
-            padding: 15px;
-            background: #f8f9fa;
-            border-radius: 8px;
+            align-items: flex-start;
+            margin-bottom: 1.5rem;
+            flex-wrap: wrap;
+            gap: 1rem;
         }
-        
-        .document-info {
+
+        .result-info {
             flex: 1;
         }
-        
-        .document-info h3 {
-            color: #667eea;
-            margin-bottom: 5px;
+
+        .result-stats {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
         }
-        
-        .document-info p {
-            color: #666;
-            font-size: 14px;
-        }
-        
-        .download-actions {
+
+        .result-actions {
             display: flex;
-            gap: 10px;
+            gap: 0.75rem;
+            flex-wrap: wrap;
         }
-        
-        .edit-actions {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 15px;
-        }
-        
-        .toggle-edit-btn {
-            display: flex;
-            align-items: center;
-            background: linear-gradient(135deg, #ff9800 0%, #ff5722 100%);
-        }
-        
-        .toggle-edit-btn:hover {
-            box-shadow: 0 8px 25px rgba(255, 152, 0, 0.3);
-        }
-        
-        .save-edits-btn {
-            display: flex;
-            align-items: center;
-            background: linear-gradient(135deg, #4caf50 0%, #2e7d32 100%);
-        }
-        
-        .save-edits-btn:hover {
-            box-shadow: 0 8px 25px rgba(76, 175, 80, 0.3);
-        }
-        
-        .cancel-edits-btn {
-            display: flex;
-            align-items: center;
-            background: linear-gradient(135deg, #f44336 0%, #c62828 100%);
-        }
-        
-        .cancel-edits-btn:hover {
-            box-shadow: 0 8px 25px rgba(244, 67, 54, 0.3);
-        }
-        
-        .status-message {
-            padding: 15px;
+
+        .edit-mode {
+            background: #fffbeb;
+            border: 2px solid var(--warning-color);
             border-radius: 8px;
-            margin-bottom: 20px;
-            font-weight: 500;
+            padding: 1rem;
         }
-        
-        .status-success {
-            background: #d4edda;
-            color: #155724;
-            border: 1px solid #c3e6cb;
+
+        .alert {
+            padding: 1rem;
+            border-radius: 6px;
+            margin-bottom: 1rem;
+            font-size: 0.875rem;
         }
-        
-        .status-error {
-            background: #f8d7da;
-            color: #721c24;
-            border: 1px solid #f5c6cb;
+
+        .alert-success {
+            background: #f0fdf4;
+            color: #166534;
+            border: 1px solid #bbf7d0;
         }
-        
-        .file-info {
-            background: #e9ecef;
-            padding: 15px;
-            border-radius: 8px;
-            margin-bottom: 20px;
+
+        .alert-error {
+            background: #fef2f2;
+            color: #dc2626;
+            border: 1px solid #fecaca;
         }
-        
-        .file-info h4 {
-            color: #495057;
-            margin-bottom: 10px;
+
+        .alert-warning {
+            background: #fffbeb;
+            color: #d97706;
+            border: 1px solid #fed7aa;
         }
-        
-        .info-item {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 5px;
-            font-size: 14px;
-        }
-        
-        .info-label {
-            font-weight: 500;
-            color: #495057;
-        }
-        
-        .info-value {
-            color: #6c757d;
-        }
-        
-        .language-controls {
-            margin-bottom: 20px;
-        }
-        
-        .language-controls label {
-            display: block;
-            margin-bottom: 8px;
-            font-weight: 600;
-            color: #495057;
-        }
-        
-        .language-controls select {
-            width: 100%;
-            padding: 10px;
-            border: 2px solid #e0e0e0;
-            border-radius: 8px;
-            font-size: 14px;
-        }
-        
-        .language-badge {
-            display: inline-block;
-            padding: 4px 12px;
-            border-radius: 15px;
-            font-size: 12px;
-            font-weight: 500;
-            margin-left: 10px;
-        }
-        
-        .badge-english {
-            background: #e3f2fd;
-            color: #1565c0;
-        }
-        
-        .badge-hindi {
-            background: #fff3e0;
-            color: #ef6c00;
-        }
-        
+
         @media (max-width: 768px) {
-            .main-content {
+            .main-container {
+                grid-template-columns: 1fr;
+                padding: 1rem;
+                gap: 1rem;
+            }
+
+            .upload-panel {
+                position: static;
+            }
+
+            .header-content {
+                padding: 1rem;
+            }
+
+            .logo-text {
+                font-size: 1.25rem;
+            }
+
+            .result-header {
                 flex-direction: column;
+                align-items: stretch;
             }
-            
-            .upload-section {
-                border-right: none;
-                border-bottom: 1px solid #e0e0e0;
+
+            .result-actions {
+                justify-content: stretch;
             }
-            
-            .document-header {
-                flex-direction: column;
-                gap: 15px;
-            }
-            
-            .download-actions {
-                justify-content: center;
-            }
-            
-            .edit-actions {
-                justify-content: center;
+
+            .btn {
+                flex: 1;
             }
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <div class="header">
-            <h1>📄 PDF Document Translator</h1>
-            <p>Translate PDF documents between English and Hindi while preserving formatting</p>
-        </div>
-        
-        <div class="main-content">
-            <div class="upload-section">
-                <div class="upload-area" id="uploadArea">
-                    <div class="upload-icon">📄</div>
-                    <div class="upload-text">Drop PDF document here</div>
-                    <div class="upload-subtext">or click to browse files • Max 15MB</div>
-                    <input type="file" id="fileInput" class="file-input" accept=".pdf">
+    <header class="header">
+        <div class="header-content">
+            <div class="logo">
+                <div class="logo-icon">P</div>
+                <div>
+                    <div class="logo-text">PNB Housing Finance</div>
+                    <div class="logo-subtitle">Document Translation Service</div>
                 </div>
-                
-                <div class="language-controls">
-                    <label for="targetLang">Translation Direction:</label>
-                    <select id="targetLang">
-                        <option value="hi">English → Hindi (अंग्रेज़ी → हिंदी)</option>
-                        <option value="en">Hindi → English (हिंदी → अंग्रेज़ी)</option>
-                    </select>
-                </div>
-                
-                <button class="btn" id="processBtn" disabled>Translate Document</button>
-                
-                <div id="fileInfo" class="file-info" style="display: none;">
-                    <h4>📋 Selected File</h4>
-                    <div class="info-item">
-                        <span class="info-label">Name:</span>
-                        <span class="info-value" id="fileName"></span>
-                    </div>
-                    <div class="info-item">
-                        <span class="info-label">Size:</span>
-                        <span class="info-value" id="fileSize"></span>
-                    </div>
-                    <div class="info-item">
-                        <span class="info-label">Type:</span>
-                        <span class="info-value" id="fileType"></span>
-                    </div>
-                </div>
-                
-                <div id="statusMessage" style="display: none;"></div>
             </div>
-            
-            <div class="display-section">
-                <div id="welcomeMessage">
-                    <div style="text-align: center; padding: 60px 20px; color: #666;">
-                        <div style="font-size: 64px; margin-bottom: 20px;">🌐</div>
-                        <h2 style="margin-bottom: 15px; color: #667eea;">Welcome to PDF Translator</h2>
-                        <p style="font-size: 16px; line-height: 1.6;">
-                            Upload your PDF document to get started.<br>
-                            We'll translate it while preserving the original formatting.
-                        </p>
-                        <div style="margin-top: 30px; padding: 20px; background: #f8f9fa; border-radius: 10px;">
-                            <h4 style="color: #495057; margin-bottom: 15px;">Supported Features:</h4>
-                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px; text-align: left;">
-                                <div>✅ English ↔ Hindi translation</div>
-                                <div>✅ Format preservation</div>
-                                <div>✅ Table structure maintained</div>
-                                <div>✅ PDF & TXT download</div>
-                                <div>✅ Document editing</div>
-                                <div>✅ Professional output</div>
-                            </div>
+            <div class="status-indicator">
+                <i class="fas fa-check-circle"></i>
+                <span>Service Online</span>
+            </div>
+        </div>
+    </header>
+
+    <div class="main-container">
+        <div class="upload-panel">
+            <div class="panel-header">
+                <h2 class="panel-title">Upload Document</h2>
+                <p class="panel-subtitle">Select a PDF file to translate between English and Hindi</p>
+            </div>
+
+            <div class="upload-area" id="uploadArea">
+                <div class="upload-icon">
+                    <i class="fas fa-cloud-upload-alt"></i>
+                </div>
+                <div class="upload-text">Drop your PDF here</div>
+                <div class="upload-subtext">or click to browse • Maximum 15MB</div>
+                <input type="file" id="fileInput" class="file-input" accept=".pdf">
+            </div>
+
+            <div class="form-group">
+                <label for="targetLang" class="form-label">Translation Direction</label>
+                <select id="targetLang" class="form-select">
+                    <option value="hi">English → Hindi (अंग्रेज़ी → हिंदी)</option>
+                    <option value="en">Hindi → English (हिंदी → अंग्रेज़ी)</option>
+                </select>
+            </div>
+
+            <button class="btn btn-primary btn-full" id="processBtn" disabled>
+                <i class="fas fa-language"></i>
+                Start Translation
+            </button>
+
+            <div id="fileInfo" class="file-info" style="display: none;">
+                <div class="file-info-header">
+                    <i class="fas fa-file-pdf"></i>
+                    Selected File
+                </div>
+                <div class="file-info-item">
+                    <span class="file-info-label">Name:</span>
+                    <span class="file-info-value" id="fileName"></span>
+                </div>
+                <div class="file-info-item">
+                    <span class="file-info-label">Size:</span>
+                    <span class="file-info-value" id="fileSize"></span>
+                </div>
+                <div class="file-info-item">
+                    <span class="file-info-label">Type:</span>
+                    <span class="file-info-value" id="fileType"></span>
+                </div>
+            </div>
+
+            <div id="statusMessage" style="display: none;"></div>
+        </div>
+
+        <div class="content-panel">
+            <div class="content-header">
+                <h3 class="content-title" id="contentTitle">Translation Results</h3>
+                <p class="content-subtitle" id="contentSubtitle">Your translated document will appear here</p>
+            </div>
+
+            <div class="content-body">
+                <div id="welcomeState" class="welcome-state">
+                    <div class="welcome-icon">
+                        <i class="fas fa-globe"></i>
+                    </div>
+                    <h3 class="welcome-title">Professional Document Translation</h3>
+                    <p class="welcome-text">
+                        Upload your PDF document to get started with our AI-powered translation service.
+                        We preserve document structure while providing accurate translations.
+                    </p>
+                    
+                    <div class="feature-grid">
+                        <div class="feature-item">
+                            <i class="fas fa-check feature-icon"></i>
+                            Structure Preservation
+                        </div>
+                        <div class="feature-item">
+                            <i class="fas fa-check feature-icon"></i>
+                            Professional Quality
+                        </div>
+                        <div class="feature-item">
+                            <i class="fas fa-check feature-icon"></i>
+                            Multiple Formats
+                        </div>
+                        <div class="feature-item">
+                            <i class="fas fa-check feature-icon"></i>
+                            Fast Processing
                         </div>
                     </div>
                 </div>
-                
-                <div id="processingState" style="display: none;">
-                    <div class="processing">
-                        <div class="spinner"></div>
-                        <h3 id="processingTitle">Translating your document...</h3>
-                        <p id="processingMessage">Please wait while we process and translate your PDF.</p>
-                        <div style="margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px; text-align: left;">
-                            <div style="font-size: 14px; color: #666; margin-bottom: 10px;">Processing Steps:</div>
-                            <div id="step1" style="margin: 5px 0; color: #667eea;">📄 Uploading document...</div>
-                            <div id="step2" style="margin: 5px 0; color: #ccc;">🤖 AI extraction and translation...</div>
-                            <div id="step3" style="margin: 5px 0; color: #ccc;">✨ Formatting and display...</div>
+
+                <div id="processingState" class="processing-state" style="display: none;">
+                    <div class="spinner"></div>
+                    <h3 class="processing-title">Processing Your Document</h3>
+                    <p class="processing-subtitle">Please wait while we translate your document</p>
+                    
+                    <div class="progress-steps">
+                        <div class="progress-step">
+                            <i class="fas fa-upload step-icon" id="step1Icon"></i>
+                            <span id="step1Text">Uploading document...</span>
                         </div>
-                        <div style="margin-top: 15px; font-size: 12px; color: #999;">
-                            This may take 15-40 seconds for typical documents
+                        <div class="progress-step">
+                            <i class="fas fa-robot step-icon" id="step2Icon"></i>
+                            <span id="step2Text">AI translation in progress...</span>
+                        </div>
+                        <div class="progress-step">
+                            <i class="fas fa-magic step-icon" id="step3Icon"></i>
+                            <span id="step3Text">Formatting and finalizing...</span>
                         </div>
                     </div>
+                    
+                    <p style="margin-top: 1.5rem; font-size: 0.875rem; color: var(--text-secondary);">
+                        Typical processing time: 15-40 seconds
+                    </p>
                 </div>
-                
-                <div id="documentResult" style="display: none;">
-                    <div class="document-header">
-                        <div class="document-info">
-                            <h3>📋 Translated Document</h3>
-                            <p id="documentStats">Ready for download and editing</p>
+
+                <div id="resultState" style="display: none;">
+                    <div class="result-header">
+                        <div class="result-info">
+                            <h4 style="margin-bottom: 0.5rem;">Translation Complete</h4>
+                            <div class="result-stats" id="resultStats">Ready for download and editing</div>
                         </div>
-                        <div class="edit-actions">
-                            <button class="btn toggle-edit-btn" id="toggleEditBtn">✏️ Edit Document</button>
-                            <button class="btn save-edits-btn" id="saveEditsBtn" style="display:none;">💾 Save Changes</button>
-                            <button class="btn cancel-edits-btn" id="cancelEditsBtn" style="display:none;">❌ Cancel</button>
-                        </div>
-                        <div class="download-actions">
-                            <button class="btn btn-success" id="downloadPdfBtn">📥 Download PDF</button>
-                            <button class="btn" id="downloadTxtBtn">📄 Download TXT</button>
+                        <div class="result-actions">
+                            <button class="btn btn-secondary" id="editBtn">
+                                <i class="fas fa-edit"></i>
+                                Edit
+                            </button>
+                            <button class="btn btn-success" id="downloadPdfBtn">
+                                <i class="fas fa-file-pdf"></i>
+                                PDF
+                            </button>
+                            <button class="btn btn-success" id="downloadDocxBtn">
+                                <i class="fas fa-file-word"></i>
+                                DOCX
+                            </button>
+                            <button class="btn btn-success" id="downloadTxtBtn">
+                                <i class="fas fa-file-alt"></i>
+                                TXT
+                            </button>
                         </div>
                     </div>
+
                     <div class="document-display" id="documentContent" contenteditable="false"></div>
+
+                    <div id="editActions" style="display: none; margin-top: 1rem; text-align: right;">
+                        <button class="btn btn-secondary" id="cancelEditBtn">
+                            <i class="fas fa-times"></i>
+                            Cancel
+                        </button>
+                        <button class="btn btn-primary" id="saveEditBtn">
+                            <i class="fas fa-save"></i>
+                            Save Changes
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
 
     <script>
-        class PDFTranslator {
+        class EnterpriseTranslator {
             constructor() {
                 this.selectedFile = null;
-                this.processedDocument = null;
-                this.originalDocumentText = null;
+                this.translatedDocument = null;
+                this.originalText = null;
                 this.isEditMode = false;
                 this.initializeEventListeners();
             }
-            
+
             initializeEventListeners() {
+                // File upload
                 const uploadArea = document.getElementById('uploadArea');
                 const fileInput = document.getElementById('fileInput');
-                const processBtn = document.getElementById('processBtn');
-                const downloadPdfBtn = document.getElementById('downloadPdfBtn');
-                const downloadTxtBtn = document.getElementById('downloadTxtBtn');
                 
-                // Edit mode buttons
-                const toggleEditBtn = document.getElementById('toggleEditBtn');
-                const saveEditsBtn = document.getElementById('saveEditsBtn');
-                const cancelEditsBtn = document.getElementById('cancelEditsBtn');
-                
-                // File upload events
                 uploadArea.addEventListener('click', () => fileInput.click());
                 uploadArea.addEventListener('dragover', this.handleDragOver.bind(this));
                 uploadArea.addEventListener('dragleave', this.handleDragLeave.bind(this));
                 uploadArea.addEventListener('drop', this.handleDrop.bind(this));
                 fileInput.addEventListener('change', this.handleFileSelect.bind(this));
-                processBtn.addEventListener('click', this.processDocument.bind(this));
-                
-                // Download events
-                downloadPdfBtn.addEventListener('click', this.downloadPDF.bind(this));
-                downloadTxtBtn.addEventListener('click', this.downloadTXT.bind(this));
-                
-                // Edit mode events
-                toggleEditBtn.addEventListener('click', this.toggleEditMode.bind(this));
-                saveEditsBtn.addEventListener('click', this.saveEdits.bind(this));
-                cancelEditsBtn.addEventListener('click', this.cancelEdits.bind(this));
+
+                // Process button
+                document.getElementById('processBtn').addEventListener('click', this.processDocument.bind(this));
+
+                // Download buttons
+                document.getElementById('downloadPdfBtn').addEventListener('click', () => this.downloadDocument('pdf'));
+                document.getElementById('downloadDocxBtn').addEventListener('click', () => this.downloadDocument('docx'));
+                document.getElementById('downloadTxtBtn').addEventListener('click', () => this.downloadDocument('txt'));
+
+                // Edit functionality
+                document.getElementById('editBtn').addEventListener('click', this.toggleEditMode.bind(this));
+                document.getElementById('saveEditBtn').addEventListener('click', this.saveEdits.bind(this));
+                document.getElementById('cancelEditBtn').addEventListener('click', this.cancelEdits.bind(this));
             }
-            
+
             handleDragOver(e) {
                 e.preventDefault();
                 e.currentTarget.classList.add('dragover');
             }
-            
+
             handleDragLeave(e) {
                 e.preventDefault();
                 e.currentTarget.classList.remove('dragover');
             }
-            
+
             handleDrop(e) {
                 e.preventDefault();
                 e.currentTarget.classList.remove('dragover');
@@ -547,39 +804,37 @@
                     this.selectFile(files[0]);
                 }
             }
-            
+
             handleFileSelect(e) {
                 const file = e.target.files[0];
                 if (file) {
                     this.selectFile(file);
                 }
             }
-            
+
             selectFile(file) {
-                // Validate file type
                 if (file.type !== 'application/pdf') {
-                    this.showErrorMessage('Please select a PDF file.');
+                    this.showAlert('Please select a PDF file.', 'error');
                     return;
                 }
-                
-                // Validate file size (15MB limit)
+
                 if (file.size > 15 * 1024 * 1024) {
-                    this.showErrorMessage('File size exceeds 15MB limit. Please select a smaller file.');
+                    this.showAlert('File size exceeds 15MB limit. Please select a smaller file.', 'error');
                     return;
                 }
-                
+
                 this.selectedFile = file;
                 this.displayFileInfo(file);
                 document.getElementById('processBtn').disabled = false;
             }
-            
+
             displayFileInfo(file) {
                 document.getElementById('fileName').textContent = file.name;
                 document.getElementById('fileSize').textContent = this.formatFileSize(file.size);
                 document.getElementById('fileType').textContent = file.type;
                 document.getElementById('fileInfo').style.display = 'block';
             }
-            
+
             formatFileSize(bytes) {
                 if (bytes === 0) return '0 Bytes';
                 const k = 1024;
@@ -587,449 +842,266 @@
                 const i = Math.floor(Math.log(bytes) / Math.log(k));
                 return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
             }
-            
+
             async processDocument() {
                 if (!this.selectedFile) return;
-                
+
                 this.showProcessingState();
-                this.updateProcessingStep(1, 'Uploading and encoding document...');
-                
+                this.updateProcessingStep(1, 'complete');
+
                 try {
                     const base64File = await this.fileToBase64(this.selectedFile);
                     
-                    this.updateProcessingStep(2, 'AI extraction and translation in progress...');
+                    this.updateProcessingStep(2, 'current');
                     const response = await this.callTranslateAPI(base64File);
                     
-                    this.updateProcessingStep(3, 'Formatting and preparing display...');
+                    this.updateProcessingStep(2, 'complete');
+                    this.updateProcessingStep(3, 'current');
                     
-                    this.processedDocument = response;
-                    this.displayDocument(response.translated_document);
-                    
-                    const processingTime = response.processing_time ? `${response.processing_time.toFixed(1)}s` : '';
-                    const detectedLang = response.detected_language || 'Unknown';
-                    const targetLang = response.target_language || 'Unknown';
-                    const wordCount = response.translated_document.trim().split(/\s+/).length;
-                    
-                    this.showSuccessMessage(
-                        `Document translated successfully! ${detectedLang} → ${targetLang} • ${wordCount.toLocaleString()} words ${processingTime ? `• ${processingTime}` : ''}`
-                    );
-                    
+                    setTimeout(() => {
+                        this.updateProcessingStep(3, 'complete');
+                        this.translatedDocument = response;
+                        this.displayResult(response);
+                    }, 1000);
+
                 } catch (error) {
                     console.error('Processing error:', error);
-                    
-                    // Show more specific error messages
-                    let errorMessage = 'Failed to translate document';
-                    if (error.message.includes('timeout')) {
-                        errorMessage = 'Translation timed out. Please try with a smaller document or try again later.';
-                    } else if (error.message.includes('size')) {
-                        errorMessage = 'Document is too large. Please use a smaller PDF (under 15MB).';
-                    } else if (error.message.includes('format')) {
-                        errorMessage = 'Invalid document format. Please ensure you\'re uploading a valid PDF file.';
-                    } else {
-                        errorMessage += ': ' + error.message;
-                    }
-                    
-                    this.showErrorMessage(errorMessage);
+                    this.showAlert('Translation failed: ' + error.message, 'error');
                     this.showWelcomeState();
                 }
             }
-            
-            updateProcessingStep(step, message) {
-                // Update step colors and messages
-                for (let i = 1; i <= 3; i++) {
-                    const stepElement = document.getElementById(`step${i}`);
-                    if (i < step) {
-                        stepElement.style.color = '#28a745'; // Green for completed
-                        stepElement.innerHTML = stepElement.innerHTML.replace(/📄|🤖|✨/, '✅');
-                    } else if (i === step) {
-                        stepElement.style.color = '#667eea'; // Blue for current
-                        if (i === 2) {
-                            stepElement.innerHTML = `🤖 ${message}`;
-                        }
-                    } else {
-                        stepElement.style.color = '#ccc'; // Gray for pending
-                    }
+
+            updateProcessingStep(step, status) {
+                const icon = document.getElementById(`step${step}Icon`);
+                const text = document.getElementById(`step${step}Text`);
+                
+                icon.className = 'step-icon';
+                
+                if (status === 'complete') {
+                    icon.classList.add('fas', 'fa-check', 'step-complete');
+                } else if (status === 'current') {
+                    icon.classList.add('fas', 'fa-spinner', 'fa-spin', 'step-current');
+                } else {
+                    icon.classList.add('fas', 'fa-circle', 'step-pending');
                 }
             }
-            
+
             async fileToBase64(file) {
                 return new Promise((resolve, reject) => {
                     const reader = new FileReader();
                     reader.onload = () => {
-                        try {
-                            const base64 = reader.result.split(',')[1];
-                            if (!base64) {
-                                throw new Error('Failed to extract base64 data');
-                            }
-                            resolve(base64);
-                        } catch (error) {
-                            reject(error);
-                        }
+                        const base64 = reader.result.split(',')[1];
+                        resolve(base64);
                     };
                     reader.onerror = () => reject(new Error('File reading failed'));
                     reader.readAsDataURL(file);
                 });
             }
-            
+
             async callTranslateAPI(base64File) {
                 const targetLang = document.getElementById('targetLang').value;
                 
-                const payload = {
-                    body: base64File,
-                    target_lang: targetLang,
-                    template_choice: 'simplified'
-                };
-                
                 const response = await fetch('/translate', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify(payload)
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        body: base64File,
+                        target_lang: targetLang,
+                        template_choice: 'simplified'
+                    })
                 });
-                
+
                 if (!response.ok) {
                     const errorData = await response.json();
                     throw new Error(errorData.detail || 'Translation failed');
                 }
-                
+
                 const result = await response.json();
-                
                 if (!result.success) {
                     throw new Error(result.message || 'Unknown error occurred');
                 }
-                
-                // Check if translation seems incomplete
-                this.checkTranslationCompleteness(result.translated_document);
-                
+
                 return result;
             }
-            
-            checkTranslationCompleteness(translatedText) {
-                const textLength = translatedText.length;
-                const wordCount = translatedText.trim().split(/\s+/).length;
+
+            displayResult(response) {
+                const content = this.formatDocumentText(response.translated_document);
+                document.getElementById('documentContent').innerHTML = content;
                 
-                // Basic heuristics to detect incomplete translations
-                const seemsIncomplete = (
-                    textLength < 200 ||  // Very short translation
-                    wordCount < 50 ||    // Very few words
-                    translatedText.endsWith('...') ||  // Ends with ellipsis
-                    translatedText.includes('[truncated]') ||  // Contains truncation markers
-                    !translatedText.trim().endsWith('.') && !translatedText.trim().endsWith('।')  // Doesn't end properly
-                );
+                const wordCount = response.translated_document.trim().split(/\s+/).length;
+                const charCount = response.translated_document.length;
+                const processingTime = response.processing_time ? `${response.processing_time.toFixed(1)}s` : '';
                 
-                if (seemsIncomplete) {
-                    console.warn('Translation may be incomplete:', {
-                        length: textLength,
-                        words: wordCount,
-                        preview: translatedText.substring(0, 100) + '...'
-                    });
-                    
-                    // Show warning to user
-                    setTimeout(() => {
-                        this.showWarningMessage(
-                            'The translation may be incomplete. If the document seems cut off, try uploading a smaller PDF or contact support.'
-                        );
-                    }, 1000);
-                }
-            }
-            
-            showWarningMessage(message) {
-                const statusDiv = document.getElementById('statusMessage');
-                statusDiv.className = 'status-message';
-                statusDiv.style.background = '#fff3cd';
-                statusDiv.style.color = '#856404';
-                statusDiv.style.border = '1px solid #ffeaa7';
-                statusDiv.textContent = '⚠️ ' + message;
-                statusDiv.style.display = 'block';
-            }
-            
-            toggleEditMode() {
-                const documentContent = document.getElementById('documentContent');
-                const toggleEditBtn = document.getElementById('toggleEditBtn');
-                const saveEditsBtn = document.getElementById('saveEditsBtn');
-                const cancelEditsBtn = document.getElementById('cancelEditsBtn');
-                
-                if (!this.isEditMode) {
-                    // Enable edit mode - switch to plain text for editing
-                    this.isEditMode = true;
-                    this.originalDocumentText = this.processedDocument.translated_document;
-                    documentContent.innerHTML = '';
-                    documentContent.textContent = this.originalDocumentText;
-                    documentContent.contentEditable = true;
-                    documentContent.classList.add('editable');
-                    toggleEditBtn.style.display = 'none';
-                    saveEditsBtn.style.display = 'block';
-                    cancelEditsBtn.style.display = 'block';
-                    
-                    this.showSuccessMessage('You can now edit the document. Click "Save Changes" when done.');
-                    documentContent.focus();
-                }
-            }
-            
-            saveEdits() {
-                const documentContent = document.getElementById('documentContent');
-                const toggleEditBtn = document.getElementById('toggleEditBtn');
-                const saveEditsBtn = document.getElementById('saveEditsBtn');
-                const cancelEditsBtn = document.getElementById('cancelEditsBtn');
-                
-                // Save edited content
-                const editedText = documentContent.textContent;
-                this.processedDocument.translated_document = editedText;
-                
-                // Disable edit mode and reformat for display
-                this.isEditMode = false;
-                documentContent.contentEditable = false;
-                documentContent.classList.remove('editable');
-                
-                // Re-apply formatting to the edited content
-                const formattedText = this.formatDocumentText(editedText);
-                documentContent.innerHTML = formattedText;
-                
-                toggleEditBtn.style.display = 'block';
-                saveEditsBtn.style.display = 'none';
-                cancelEditsBtn.style.display = 'none';
-                
-                this.showSuccessMessage('Your changes have been saved.');
-            }
-            
-            cancelEdits() {
-                const documentContent = document.getElementById('documentContent');
-                const toggleEditBtn = document.getElementById('toggleEditBtn');
-                const saveEditsBtn = document.getElementById('saveEditsBtn');
-                const cancelEditsBtn = document.getElementById('cancelEditsBtn');
-                
-                // Revert to original content and reformat for display
-                const formattedText = this.formatDocumentText(this.originalDocumentText);
-                documentContent.innerHTML = formattedText;
-                
-                // Disable edit mode
-                this.isEditMode = false;
-                documentContent.contentEditable = false;
-                documentContent.classList.remove('editable');
-                toggleEditBtn.style.display = 'block';
-                saveEditsBtn.style.display = 'none';
-                cancelEditsBtn.style.display = 'none';
-                
-                this.showSuccessMessage('Changes discarded. Reverted to original document.');
-            }
-            
-            displayDocument(documentText) {
-                const documentContent = document.getElementById('documentContent');
-                
-                // Format the document text for better display
-                const formattedText = this.formatDocumentText(documentText);
-                documentContent.innerHTML = formattedText;
-                
-                // Update document statistics
-                this.updateDocumentStats(documentText);
-                
-                this.originalDocumentText = documentText;
-                this.showDocumentResult();
-                
-                // Reset edit mode when displaying a new document
-                this.isEditMode = false;
-                documentContent.contentEditable = false;
-                documentContent.classList.remove('editable');
-                document.getElementById('toggleEditBtn').style.display = 'block';
-                document.getElementById('saveEditsBtn').style.display = 'none';
-                document.getElementById('cancelEditsBtn').style.display = 'none';
-            }
-            
-            updateDocumentStats(text) {
-                const charCount = text.length;
-                const wordCount = text.trim().split(/\s+/).length;
-                const lineCount = text.split('\n').length;
-                
-                const statsElement = document.getElementById('documentStats');
-                const targetLang = document.getElementById('targetLang').value;
-                const langName = targetLang === 'hi' ? 'Hindi' : 'English';
-                
-                statsElement.innerHTML = `
-                    Translated to ${langName} • 
-                    ${charCount.toLocaleString()} characters • 
+                document.getElementById('resultStats').innerHTML = `
+                    ${response.detected_language || 'Source'} → ${response.target_language || 'Target'} • 
                     ${wordCount.toLocaleString()} words • 
-                    ${lineCount} lines
+                    ${charCount.toLocaleString()} characters
+                    ${processingTime ? ` • ${processingTime}` : ''}
                 `;
+
+                this.originalText = response.translated_document;
+                this.showResultState();
+                this.showAlert('Translation completed successfully!', 'success');
             }
-            
+
             formatDocumentText(text) {
                 if (!text || text.trim().length === 0) {
-                    return '<p style="color: #999; font-style: italic;">No content to display</p>';
+                    return '<p style="color: var(--text-secondary); font-style: italic;">No content to display</p>';
                 }
-                
-                // Clean up the text first
-                let cleanText = text
-                    // Remove excessive whitespace and empty lines
-                    .replace(/\n\s*\n\s*\n/g, '\n\n')
-                    // Remove scattered single characters or numbers on their own lines
-                    .replace(/^\s*[0-9]\s*$/gm, '')
-                    // Remove lines with only special characters
-                    .replace(/^[\s\-_=|]+$/gm, '')
-                    // Clean up spacing around headers
-                    .replace(/\n+(#{1,3}\s)/g, '\n\n$1')
-                    .trim();
-                
-                // Basic markdown-like formatting for better display
-                let formatted = cleanText
-                    // Escape HTML first to prevent XSS
+
+                let formatted = text
                     .replace(/&/g, '&amp;')
                     .replace(/</g, '&lt;')
                     .replace(/>/g, '&gt;')
-                    
-                    // Convert markdown headers with better styling
-                    .replace(/^# (.+)$/gm, '<h1 style="color: #667eea; margin: 25px 0 20px 0; font-size: 26px; font-weight: 700; border-bottom: 2px solid #667eea; padding-bottom: 10px;">$1</h1>')
-                    .replace(/^## (.+)$/gm, '<h2 style="color: #667eea; margin: 20px 0 15px 0; font-size: 22px; font-weight: 600; border-left: 4px solid #667eea; padding-left: 15px;">$1</h2>')
-                    .replace(/^### (.+)$/gm, '<h3 style="color: #495057; margin: 18px 0 12px 0; font-size: 18px; font-weight: 600;">$1</h3>')
-                    
-                    // Convert bold text with better styling
-                    .replace(/\*\*(.+?)\*\*/g, '<strong style="color: #495057; font-weight: 700; background: #f8f9fa; padding: 2px 4px; border-radius: 3px;">$1</strong>')
-                    
-                    // Convert numbered lists with better formatting
-                    .replace(/^(\d+\.\s.+)$/gm, '<div style="margin: 10px 0; padding: 8px 0 8px 30px; text-indent: -20px; border-left: 2px solid #e9ecef; padding-left: 25px;">$1</div>')
-                    
-                    // Convert lettered lists (a), b), c))
-                    .replace(/^([a-z]\)\s.+)$/gm, '<div style="margin: 8px 0; padding-left: 40px; text-indent: -20px; color: #495057;">$1</div>')
-                    
-                    // Convert bullet points with better styling
-                    .replace(/^[•\-]\s(.+)$/gm, '<div style="margin: 8px 0; padding-left: 30px; text-indent: -15px; color: #495057;">• $1</div>')
-                    
-                    // Handle table-like structures - convert to proper HTML tables
-                    .replace(/^(\|.+\|)$/gm, (match) => {
-                        const cells = match.split('|').filter(cell => cell.trim() !== '');
-                        const formattedCells = cells.map(cell => `<td style="border: 1px solid #ddd; padding: 8px;">${cell.trim()}</td>`).join('');
-                        return `<table style="width: 100%; border-collapse: collapse; margin: 10px 0;"><tr>${formattedCells}</tr></table>`;
-                    })
-                    
-                    // Handle horizontal rules/separators
-                    .replace(/^[-=]{3,}$/gm, '<hr style="margin: 20px 0; border: none; border-top: 2px solid #e9ecef;">')
-                    
-                    // Convert line breaks to proper spacing
-                    .replace(/\n\n/g, '</p><p style="margin: 15px 0; text-align: justify; line-height: 1.7; color: #495057;">')
+                    .replace(/^# (.+)$/gm, '<h1>$1</h1>')
+                    .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+                    .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+                    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+                    .replace(/^(\d+\.\s.+)$/gm, '<div style="margin: 8px 0; padding-left: 20px;">$1</div>')
+                    .replace(/^[•\-]\s(.+)$/gm, '<div style="margin: 8px 0; padding-left: 20px;">• $1</div>')
+                    .replace(/\n\n/g, '</p><p>')
                     .replace(/\n/g, '<br>');
-                
-                // Wrap in paragraph tags
-                formatted = '<div style="font-family: Georgia, serif; font-size: 15px;"><p style="margin: 15px 0; text-align: justify; line-height: 1.7; color: #495057;">' + formatted + '</p></div>';
-                
-                // Clean up empty paragraphs and fix spacing
-                formatted = formatted
-                    .replace(/<p[^>]*>\s*<\/p>/g, '')
-                    .replace(/<p[^>]*>\s*<br>\s*<\/p>/g, '')
-                    .replace(/(<\/h[1-3]>)\s*<p[^>]*>\s*<br>/g, '$1<p style="margin: 15px 0; text-align: justify; line-height: 1.7; color: #495057;">')
-                    .replace(/(<\/div>)\s*<p[^>]*>\s*<br>/g, '$1<p style="margin: 15px 0; text-align: justify; line-height: 1.7; color: #495057;">');
-                
-                return formatted;
+
+                return '<p>' + formatted + '</p>';
             }
-            
-            downloadPDF() {
-                if (!this.processedDocument) return;
+
+            toggleEditMode() {
+                const content = document.getElementById('documentContent');
+                const editActions = document.getElementById('editActions');
                 
-                try {
-                    const { jsPDF } = window.jspdf;
-                    const doc = new jsPDF('p', 'mm', 'a4');
-                    
-                    // Set font and size
-                    doc.setFont('courier', 'normal');
-                    doc.setFontSize(10);
-                    
-                    // Get the current document content (which may have been edited)
-                    const currentDocumentText = this.processedDocument.translated_document;
-                    
-                    // Split text into lines that fit the page width
-                    const pageWidth = doc.internal.pageSize.getWidth();
-                    const margin = 15;
-                    const maxLineWidth = pageWidth - (margin * 2);
-                    const lines = doc.splitTextToSize(currentDocumentText, maxLineWidth);
-                    
-                    // Add text to PDF with page breaks
-                    let yPosition = margin;
-                    const lineHeight = 4;
-                    const pageHeight = doc.internal.pageSize.getHeight();
-                    
-                    lines.forEach(line => {
-                        if (yPosition + lineHeight > pageHeight - margin) {
-                            doc.addPage();
-                            yPosition = margin;
-                        }
-                        doc.text(line, margin, yPosition);
-                        yPosition += lineHeight;
-                    });
-                    
-                    // Generate filename
-                    const targetLang = document.getElementById('targetLang').value;
-                    const langLabel = targetLang === 'hi' ? 'hindi' : 'english';
-                    const fileName = `${this.selectedFile.name.replace('.pdf', '')}_${langLabel}.pdf`;
-                    doc.save(fileName);
-                    
-                } catch (error) {
-                    this.showErrorMessage('Failed to generate PDF: ' + error.message);
+                if (!this.isEditMode) {
+                    this.isEditMode = true;
+                    content.contentEditable = true;
+                    content.classList.add('edit-mode');
+                    content.textContent = this.translatedDocument.translated_document;
+                    editActions.style.display = 'block';
+                    content.focus();
+                } else {
+                    this.cancelEdits();
                 }
             }
-            
-            downloadTXT() {
-                if (!this.processedDocument) return;
+
+            saveEdits() {
+                const content = document.getElementById('documentContent');
+                const editActions = document.getElementById('editActions');
                 
+                this.translatedDocument.translated_document = content.textContent;
+                this.isEditMode = false;
+                content.contentEditable = false;
+                content.classList.remove('edit-mode');
+                
+                const formatted = this.formatDocumentText(content.textContent);
+                content.innerHTML = formatted;
+                
+                editActions.style.display = 'none';
+                this.showAlert('Changes saved successfully!', 'success');
+            }
+
+            cancelEdits() {
+                const content = document.getElementById('documentContent');
+                const editActions = document.getElementById('editActions');
+                
+                this.isEditMode = false;
+                content.contentEditable = false;
+                content.classList.remove('edit-mode');
+                
+                const formatted = this.formatDocumentText(this.originalText);
+                content.innerHTML = formatted;
+                
+                editActions.style.display = 'none';
+            }
+
+            async downloadDocument(format) {
+                if (!this.translatedDocument) {
+                    this.showAlert('No document available for download', 'error');
+                    return;
+                }
+
+                // Show loading state
+                const button = document.getElementById(`download${format.charAt(0).toUpperCase() + format.slice(1)}Btn`);
+                const originalText = button.innerHTML;
+                button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating...';
+                button.disabled = true;
+
                 try {
-                    // Get the current document content (which may have been edited)
-                    const currentDocumentText = this.processedDocument.translated_document;
-                    const blob = new Blob([currentDocumentText], { type: 'text/plain;charset=utf-8' });
+                    const response = await fetch('/download', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            translated_text: this.translatedDocument.translated_document,
+                            source_lang: this.translatedDocument.detected_language || 'English',
+                            target_lang: this.translatedDocument.target_language || 'Hindi',
+                            format: format
+                        })
+                    });
+
+                    if (!response.ok) {
+                        const errorData = await response.json();
+                        throw new Error(errorData.detail || 'Download failed');
+                    }
+
+                    const blob = await response.blob();
                     const url = URL.createObjectURL(blob);
                     const a = document.createElement('a');
                     a.href = url;
-                    
-                    const targetLang = document.getElementById('targetLang').value;
-                    const langLabel = targetLang === 'hi' ? 'hindi' : 'english';
-                    a.download = `${this.selectedFile.name.replace('.pdf', '')}_${langLabel}.txt`;
-                    
+                    a.download = `professional_translation.${format}`;
                     document.body.appendChild(a);
                     a.click();
                     document.body.removeChild(a);
                     URL.revokeObjectURL(url);
-                    
+
+                    this.showAlert(`${format.toUpperCase()} document downloaded successfully!`, 'success');
+
                 } catch (error) {
-                    this.showErrorMessage('Failed to download text file: ' + error.message);
+                    console.error('Download error:', error);
+                    this.showAlert(`Failed to download ${format.toUpperCase()}: ${error.message}`, 'error');
+                } finally {
+                    // Restore button state
+                    button.innerHTML = originalText;
+                    button.disabled = false;
                 }
             }
-            
-            showProcessingState() {
-                document.getElementById('welcomeMessage').style.display = 'none';
-                document.getElementById('documentResult').style.display = 'none';
-                document.getElementById('processingState').style.display = 'block';
-            }
-            
-            showDocumentResult() {
-                document.getElementById('welcomeMessage').style.display = 'none';
-                document.getElementById('processingState').style.display = 'none';
-                document.getElementById('documentResult').style.display = 'block';
-            }
-            
+
             showWelcomeState() {
+                document.getElementById('welcomeState').style.display = 'block';
                 document.getElementById('processingState').style.display = 'none';
-                document.getElementById('documentResult').style.display = 'none';
-                document.getElementById('welcomeMessage').style.display = 'block';
+                document.getElementById('resultState').style.display = 'none';
             }
-            
-            showSuccessMessage(message) {
+
+            showProcessingState() {
+                document.getElementById('welcomeState').style.display = 'none';
+                document.getElementById('processingState').style.display = 'block';
+                document.getElementById('resultState').style.display = 'none';
+                
+                // Reset steps
+                for (let i = 1; i <= 3; i++) {
+                    this.updateProcessingStep(i, 'pending');
+                }
+            }
+
+            showResultState() {
+                document.getElementById('welcomeState').style.display = 'none';
+                document.getElementById('processingState').style.display = 'none';
+                document.getElementById('resultState').style.display = 'block';
+            }
+
+            showAlert(message, type) {
                 const statusDiv = document.getElementById('statusMessage');
-                statusDiv.className = 'status-message status-success';
+                statusDiv.className = `alert alert-${type}`;
                 statusDiv.textContent = message;
                 statusDiv.style.display = 'block';
-                setTimeout(() => {
-                    statusDiv.style.display = 'none';
-                }, 5000);
-            }
-            
-            showErrorMessage(message) {
-                const statusDiv = document.getElementById('statusMessage');
-                statusDiv.className = 'status-message status-error';
-                statusDiv.textContent = message;
-                statusDiv.style.display = 'block';
+                
+                if (type === 'success') {
+                    setTimeout(() => {
+                        statusDiv.style.display = 'none';
+                    }, 5000);
+                }
             }
         }
-        
+
         // Initialize the application
         document.addEventListener('DOMContentLoaded', () => {
-            new PDFTranslator();
+            new EnterpriseTranslator();
         });
     </script>
 </body>

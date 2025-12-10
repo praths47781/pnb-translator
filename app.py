@@ -7,11 +7,13 @@ import logging
 import time
 from datetime import datetime
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional
 from botocore.config import Config
+from docx_generator import generate_docx_from_translation
+from pdf_generator import generate_pdf_from_translation
 
 # Configure logging
 logging.basicConfig(
@@ -37,7 +39,7 @@ app.add_middleware(
 )
 
 # Initialize AWS clients with extended timeout
-logger.info("Initializing AWS Bedrock client with extended timeout...")
+logger.info("Initializing AWS clients...")
 try:
     config = Config(
         read_timeout=300,  # 5 minutes
@@ -49,9 +51,11 @@ try:
     )
     
     bedrock = boto3.client('bedrock-runtime', config=config)
+    s3_client = boto3.client('s3', config=config)
     logger.info("✅ AWS Bedrock client initialized successfully with extended timeout (5min)")
+    logger.info("✅ AWS S3 client initialized successfully")
 except Exception as e:
-    logger.error(f"❌ Failed to initialize AWS Bedrock client: {str(e)}")
+    logger.error(f"❌ Failed to initialize AWS clients: {str(e)}")
     raise
 
 # Environment variables
@@ -96,6 +100,240 @@ async def health_check():
         "timestamp": datetime.now().isoformat()
     }
 
+@app.get("/s3-status")
+async def s3_status():
+    """Check S3 bucket status and file counts"""
+    try:
+        logger.info(f"🔍 Testing S3 connectivity to bucket: {BUCKET_NAME}")
+        
+        # Test bucket access
+        try:
+            s3_client.head_bucket(Bucket=BUCKET_NAME)
+            logger.info(f"✅ S3 bucket access confirmed: {BUCKET_NAME}")
+        except Exception as bucket_error:
+            logger.error(f"❌ S3 bucket access failed: {str(bucket_error)}")
+            return {
+                "status": "bucket_access_denied",
+                "bucket": BUCKET_NAME,
+                "error": str(bucket_error),
+                "timestamp": datetime.now().isoformat()
+            }
+        
+        # List objects in input folder
+        logger.info(f"📂 Listing objects in input/ folder...")
+        input_response = s3_client.list_objects_v2(
+            Bucket=BUCKET_NAME,
+            Prefix="input/",
+            MaxKeys=1000
+        )
+        input_count = input_response.get('KeyCount', 0)
+        logger.info(f"📊 Found {input_count} files in input/ folder")
+        
+        # List objects in output folder
+        logger.info(f"📂 Listing objects in output/ folder...")
+        output_response = s3_client.list_objects_v2(
+            Bucket=BUCKET_NAME,
+            Prefix="output/",
+            MaxKeys=1000
+        )
+        output_count = output_response.get('KeyCount', 0)
+        logger.info(f"📊 Found {output_count} files in output/ folder")
+        
+        # Get recent files
+        recent_files = []
+        if 'Contents' in input_response:
+            for obj in input_response['Contents'][:5]:  # Last 5 files
+                recent_files.append({
+                    'key': obj['Key'],
+                    'size': obj['Size'],
+                    'modified': obj['LastModified'].isoformat()
+                })
+        
+        return {
+            "status": "connected",
+            "bucket": BUCKET_NAME,
+            "region": s3_client.meta.region_name,
+            "input_files": input_count,
+            "output_files": output_count,
+            "recent_files": recent_files,
+            "folders": {
+                "input": f"s3://{BUCKET_NAME}/input/",
+                "output": f"s3://{BUCKET_NAME}/output/"
+            },
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"❌ S3 status check failed: {str(e)}")
+        logger.exception("📋 S3 Status Check Traceback:")
+        return {
+            "status": "error",
+            "bucket": BUCKET_NAME,
+            "error": str(e),
+            "error_type": type(e).__name__,
+            "timestamp": datetime.now().isoformat()
+        }
+
+@app.post("/test-s3")
+async def test_s3_upload():
+    """Test S3 upload functionality with a small test file"""
+    request_id = f"test_{int(time.time())}"
+    
+    try:
+        # Create a small test file
+        test_content = f"Test file created at {datetime.now().isoformat()}".encode('utf-8')
+        test_file_name = f"test_file_{request_id}.txt"
+        
+        # Upload test file
+        s3_url = upload_to_s3(
+            file_content=test_content,
+            file_name=test_file_name,
+            folder="test",
+            request_id=request_id,
+            content_type="text/plain"
+        )
+        
+        return {
+            "status": "success",
+            "message": "S3 upload test successful",
+            "s3_url": s3_url,
+            "file_size": len(test_content),
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"❌ S3 upload test failed: {str(e)}")
+        return {
+            "status": "failed",
+            "error": str(e),
+            "timestamp": datetime.now().isoformat()
+        }
+
+class DownloadRequest(BaseModel):
+    translated_text: str
+    source_lang: str = "English"
+    target_lang: str = "Hindi"
+    format: str = "pdf"  # pdf, docx, txt
+
+@app.post("/download")
+async def download_document(request: DownloadRequest):
+    """Generate and download document in specified format"""
+    request_id = f"download_{int(time.time())}"
+    logger.info(f"📥 [{request_id}] Download request: {request.format.upper()} format")
+    
+    try:
+        if request.format.lower() == "pdf":
+            logger.info(f"🔄 [{request_id}] Generating PDF document...")
+            doc_bytes = generate_pdf_from_translation(
+                request.translated_text, 
+                request.source_lang, 
+                request.target_lang
+            )
+            logger.info(f"✅ [{request_id}] PDF generated successfully ({len(doc_bytes)} bytes)")
+            
+            # Save PDF to S3
+            try:
+                output_file_name = generate_file_name("translated_document", request_id, "pdf") + ".pdf"
+                output_s3_url = upload_to_s3(
+                    file_content=doc_bytes,
+                    file_name=output_file_name,
+                    folder="output",
+                    request_id=request_id,
+                    content_type="application/pdf"
+                )
+                logger.info(f"📁 [{request_id}] Output PDF saved to S3: {output_s3_url}")
+            except Exception as e:
+                logger.warning(f"⚠️  [{request_id}] Failed to save PDF to S3: {str(e)}")
+                # Continue with download even if S3 upload fails
+            
+            return Response(
+                content=doc_bytes,
+                media_type="application/pdf",
+                headers={
+                    "Content-Disposition": "attachment; filename=professional_translation.pdf",
+                    "Content-Length": str(len(doc_bytes))
+                }
+            )
+        
+        elif request.format.lower() == "docx":
+            logger.info(f"🔄 [{request_id}] Generating DOCX document...")
+            doc_bytes = generate_docx_from_translation(
+                request.translated_text,
+                request.source_lang,
+                request.target_lang
+            )
+            logger.info(f"✅ [{request_id}] DOCX generated successfully ({len(doc_bytes)} bytes)")
+            
+            # Save DOCX to S3
+            output_s3_url = None
+            try:
+                logger.info(f"💾 [{request_id}] Attempting to save output DOCX to S3...")
+                output_file_name = generate_file_name("translated_document", request_id, "docx") + ".docx"
+                output_s3_url = upload_to_s3(
+                    file_content=doc_bytes,
+                    file_name=output_file_name,
+                    folder="output",
+                    request_id=request_id,
+                    content_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                )
+                logger.info(f"📁 [{request_id}] ✅ Output DOCX saved to S3: {output_s3_url}")
+            except Exception as e:
+                logger.error(f"❌ [{request_id}] Failed to save DOCX to S3: {str(e)}")
+                logger.error(f"📋 [{request_id}] S3 Error Details: {type(e).__name__}")
+                logger.exception(f"📋 [{request_id}] S3 DOCX Upload Traceback:")
+                # Continue with download even if S3 upload fails
+            
+            return Response(
+                content=doc_bytes,
+                media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                headers={
+                    "Content-Disposition": "attachment; filename=professional_translation.docx",
+                    "Content-Length": str(len(doc_bytes))
+                }
+            )
+        
+        elif request.format.lower() == "txt":
+            logger.info(f"🔄 [{request_id}] Generating TXT document...")
+            # Add professional header to TXT file
+            txt_content = f"""PNB HOUSING FINANCE LTD.
+PROFESSIONAL TRANSLATION SERVICE
+
+Document: Professional Translation
+Source Language: {request.source_lang}
+Target Language: {request.target_lang}
+Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+
+{'='*60}
+
+{request.translated_text}
+
+{'='*60}
+
+CONFIDENTIAL DOCUMENT | PNB Housing Finance Ltd.
+This document was generated using AI-powered professional translation technology.
+"""
+            
+            txt_bytes = txt_content.encode('utf-8')
+            logger.info(f"✅ [{request_id}] TXT generated successfully ({len(txt_bytes)} bytes)")
+            
+            return Response(
+                content=txt_bytes,
+                media_type="text/plain; charset=utf-8",
+                headers={
+                    "Content-Disposition": "attachment; filename=professional_translation.txt",
+                    "Content-Length": str(len(txt_bytes))
+                }
+            )
+        
+        else:
+            logger.error(f"❌ [{request_id}] Unsupported format: {request.format}")
+            raise HTTPException(status_code=400, detail="Unsupported format. Use 'pdf', 'docx', or 'txt'")
+            
+    except Exception as e:
+        logger.error(f"💥 [{request_id}] Download error: {str(e)}")
+        logger.exception(f"📋 [{request_id}] Full traceback:")
+        raise HTTPException(status_code=500, detail=f"Failed to generate {request.format.upper()} document: {str(e)}")
+
 @app.post("/translate")
 async def translate_pdf(request: TranslateRequest):
     """Translate PDF document using Claude 4.5 and return translated text"""
@@ -122,6 +360,25 @@ async def translate_pdf(request: TranslateRequest):
         if len(pdf_bytes) > 15 * 1024 * 1024:
             logger.error(f"❌ [{request_id}] File size exceeds 15MB limit: {file_size_mb:.2f} MB")
             raise HTTPException(status_code=400, detail="File size exceeds 15MB limit")
+        
+        # Save input PDF to S3
+        input_s3_url = None
+        try:
+            logger.info(f"💾 [{request_id}] Attempting to save input PDF to S3...")
+            input_file_name = generate_file_name("input_document", request_id) + ".pdf"
+            input_s3_url = upload_to_s3(
+                file_content=pdf_bytes,
+                file_name=input_file_name,
+                folder="input",
+                request_id=request_id,
+                content_type="application/pdf"
+            )
+            logger.info(f"📁 [{request_id}] ✅ Input PDF saved to S3: {input_s3_url}")
+        except Exception as e:
+            logger.error(f"❌ [{request_id}] Failed to save input PDF to S3: {str(e)}")
+            logger.error(f"📋 [{request_id}] S3 Error Details: {type(e).__name__}")
+            logger.exception(f"📋 [{request_id}] S3 Input Upload Traceback:")
+            # Continue processing even if S3 upload fails
         
         # Extract and translate content using Claude 4.5
         logger.info(f"🤖 [{request_id}] Starting AI extraction and translation...")
@@ -171,12 +428,14 @@ async def extract_and_translate_pdf(pdf_bytes: bytes, target_lang: str, request_
     prompt_text = f"""You are a professional document translator specializing in legal, financial, and official documents. Your task is to translate this PDF document from {source_language} to {target_language}.
 
 CRITICAL TRANSLATION REQUIREMENTS:
-1. COMPLETE TRANSLATION: Translate every single word, sentence, and paragraph from beginning to end
-2. NO TRUNCATION: Never stop mid-sentence or mid-paragraph - complete the entire document
+1. COMPLETE TRANSLATION: Translate EVERY SINGLE WORD from the beginning to the absolute end of the document
+2. NO TRUNCATION: Never stop mid-sentence, mid-paragraph, or mid-section - translate until the document is 100% complete
 3. PRESERVE STRUCTURE: Maintain exact document hierarchy, headings, subheadings, and sections
-4. MAINTAIN FORMATTING: Keep all bullet points, numbered lists, tables, and indentation
+4. MAINTAIN FORMATTING: Keep all bullet points, numbered lists, tables, and indentation exactly as they appear
 5. PRESERVE LEGAL TERMS: Keep legal references, case numbers, dates, and official terminology accurate
 6. PROFESSIONAL QUALITY: Use appropriate formal language and terminology for official documents
+7. COMPLETE TABLES: Translate all table content including headers, rows, and footnotes
+8. FINISH EVERYTHING: Ensure no content is left untranslated, including disclaimers, notes, and fine print
 
 FORMATTING REQUIREMENTS:
 - Use clear markdown formatting for structure:
@@ -186,7 +445,7 @@ FORMATTING REQUIREMENTS:
   - **bold** for important terms, headings, and emphasis
   - Use proper numbered lists: 1. 2. 3. with clear spacing
   - Use bullet points: • for sub-items
-- For tables, maintain clear structure with proper alignment
+- For tables, use pipe-separated format: | Column 1 | Column 2 | Column 3 |
 - Use proper paragraph spacing with double line breaks between sections
 - Preserve all original numbering, lettering (a, b, c), and indentation
 - Remove any empty pages or unnecessary whitespace
@@ -198,17 +457,26 @@ CONTENT PRESERVATION:
 - Maintain reference numbers, case citations, and official codes
 - Keep addresses, contact information, and formal signatures unchanged
 - Translate headers, footers, and all visible text content
+- Include all disclaimers, notes, and fine print at the end
+
+TRANSLATION COMPLETENESS CHECK:
+- Ensure you have translated from the very first word to the very last word
+- Include all footnotes, disclaimers, and legal notices
+- Do not stop until you reach the absolute end of the document
+- If the document has multiple pages, translate ALL pages completely
+- Include any contact information, website URLs, or reference numbers
 
 OUTPUT REQUIREMENTS:
 - Start translation immediately without any preamble
 - Translate the COMPLETE document from first word to last word
-- End only when the entire document has been fully translated
+- End only when the entire document has been fully translated including all fine print
 - Do not add any explanatory notes or comments
 - Ensure clean, well-formatted output without empty sections
 - Remove any OCR artifacts or scattered characters
 - Ensure the translation flows naturally while maintaining accuracy
+- CRITICAL: Do not stop until you have translated every single piece of text in the document
 
-Begin the complete translation now:"""
+Begin the complete translation now and ensure you translate EVERYTHING:"""
 
     content_items = [
         {
@@ -225,10 +493,10 @@ Begin the complete translation now:"""
         }
     ]
     
-    # Prepare Bedrock payload
+    # Prepare Bedrock payload with maximum tokens for complete translations
     prompt = {
         "anthropic_version": "bedrock-2023-05-31",
-        "max_tokens": 8000,  # Increased for complete translations
+        "max_tokens": 12000,  # Maximum tokens for complete translations
         "temperature": 0.1,  # Lower temperature for more consistent translations
         "messages": [
             {
@@ -373,6 +641,78 @@ def detect_language_from_content(text: str) -> str:
         return "Hindi"
     else:
         return "English"
+
+def upload_to_s3(file_content: bytes, file_name: str, folder: str, request_id: str, content_type: str = 'application/octet-stream') -> str:
+    """Upload file to S3 bucket in specified folder"""
+    try:
+        # Create S3 key with folder structure
+        s3_key = f"{folder}/{file_name}"
+        
+        logger.info(f"📤 [{request_id}] Starting S3 upload...")
+        logger.info(f"📋 [{request_id}] S3 Details:")
+        logger.info(f"   - Bucket: {BUCKET_NAME}")
+        logger.info(f"   - Key: {s3_key}")
+        logger.info(f"   - Content Type: {content_type}")
+        logger.info(f"   - File Size: {len(file_content)} bytes")
+        
+        # Check S3 client configuration
+        logger.info(f"🔧 [{request_id}] S3 Client Region: {s3_client.meta.region_name}")
+        
+        # Test S3 connectivity first
+        logger.info(f"🔍 [{request_id}] Testing S3 bucket access...")
+        try:
+            s3_client.head_bucket(Bucket=BUCKET_NAME)
+            logger.info(f"✅ [{request_id}] S3 bucket access confirmed")
+        except Exception as bucket_error:
+            logger.error(f"❌ [{request_id}] S3 bucket access failed: {str(bucket_error)}")
+            raise Exception(f"S3 bucket access denied: {str(bucket_error)}")
+        
+        # Upload to S3
+        logger.info(f"📤 [{request_id}] Executing S3 put_object...")
+        response = s3_client.put_object(
+            Bucket=BUCKET_NAME,
+            Key=s3_key,
+            Body=file_content,
+            ContentType=content_type,
+            Metadata={
+                'request_id': request_id,
+                'upload_timestamp': datetime.now().isoformat(),
+                'service': 'pdf-translator',
+                'file_size': str(len(file_content))
+            }
+        )
+        
+        # Log response details
+        logger.info(f"📋 [{request_id}] S3 Upload Response:")
+        logger.info(f"   - ETag: {response.get('ETag', 'N/A')}")
+        logger.info(f"   - VersionId: {response.get('VersionId', 'N/A')}")
+        
+        # Generate S3 URL
+        s3_url = f"s3://{BUCKET_NAME}/{s3_key}"
+        https_url = f"https://{BUCKET_NAME}.s3.{s3_client.meta.region_name}.amazonaws.com/{s3_key}"
+        
+        logger.info(f"✅ [{request_id}] Successfully uploaded to S3!")
+        logger.info(f"   - S3 URL: {s3_url}")
+        logger.info(f"   - HTTPS URL: {https_url}")
+        
+        return s3_url
+        
+    except Exception as e:
+        logger.error(f"❌ [{request_id}] S3 upload failed with error: {str(e)}")
+        logger.error(f"📋 [{request_id}] Error type: {type(e).__name__}")
+        logger.exception(f"📋 [{request_id}] Full S3 upload traceback:")
+        raise Exception(f"S3 upload failed: {str(e)}")
+
+def generate_file_name(original_name: str, request_id: str, suffix: str = "") -> str:
+    """Generate a unique file name for S3 storage"""
+    # Clean the original name
+    base_name = original_name.replace('.pdf', '').replace(' ', '_')
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    
+    if suffix:
+        return f"{base_name}_{suffix}_{request_id}_{timestamp}"
+    else:
+        return f"{base_name}_{request_id}_{timestamp}"
 
 if __name__ == "__main__":
     import uvicorn

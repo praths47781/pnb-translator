@@ -1,18 +1,30 @@
-# PDF Translation Service
+# Enterprise PDF Translation Service
 
-A FastAPI-based service that translates PDF documents using AWS Bedrock (Claude 4.5) and generates professionally formatted output PDFs.
+A comprehensive FastAPI-based web application that translates PDF documents using AWS Bedrock (Claude 4.5 Opus) and generates professionally formatted documents with PNB Housing Finance branding.
 
 ## Features
 
-- **AI-Powered Translation**: Uses Claude 4.5 for OCR extraction and English↔Hindi translation
-- **Professional Templates**: Generates clean, formatted PDFs with consistent styling
-- **Web Interface**: Integrated HTML frontend with drag-and-drop file upload
-- **Document Structure Preservation**: Maintains headings, sections, and tables
-- **Real-time Progress**: Visual progress indicators and step-by-step feedback
-- **Document Editing**: Edit translated content before download
-- **Multiple Formats**: Download as PDF or TXT
-- **Enhanced Formatting**: Improved text structure and table handling
-- **Fast Processing**: 15-40 seconds for translation, <2 seconds for PDF generation
+### Core Translation Capabilities
+- **AI-Powered Translation**: Uses Claude 4.5 Opus for intelligent OCR extraction and English↔Hindi translation
+- **Document Structure Preservation**: Maintains headings, sections, tables, lists, and formatting hierarchy
+- **Multiple Output Formats**: Generate professional PDFs, Word documents (DOCX), and text files
+- **Professional Templates**: PNB Housing Finance branded documents with consistent enterprise styling
+- **Hindi Font Support**: Automatic font detection and registration for proper Hindi text rendering
+
+### Web Application Features
+- **Modern Web Interface**: Responsive design with drag-and-drop file upload
+- **Real-time Progress Tracking**: Visual progress indicators with step-by-step feedback
+- **In-Browser Document Editing**: Edit translated content before final download
+- **Multiple Download Options**: PDF, DOCX, and TXT formats with professional formatting
+- **Mobile Responsive**: Optimized for desktop, tablet, and mobile devices
+- **Professional UI**: PNB Housing Finance branding with modern design elements
+
+### Enterprise Features
+- **AWS S3 Integration**: Automatic file storage and management with metadata
+- **Comprehensive Logging**: Structured logging with request IDs and performance metrics
+- **Health Monitoring**: Built-in health checks and S3 connectivity status endpoints
+- **Error Recovery**: Retry logic with exponential backoff for API failures
+- **Performance Optimization**: Fast processing with 15-40 seconds for translation, <2 seconds for document generation
 
 ## Prerequisites
 
@@ -72,15 +84,17 @@ A FastAPI-based service that translates PDF documents using AWS Bedrock (Claude 
 ## API Usage
 
 ### Web Interface
-Navigate to `http://localhost:8000` for the integrated web interface with:
-- Drag-and-drop PDF upload
-- Language selection (English/Hindi)
-- Real-time progress tracking
-- Automatic PDF download
+Navigate to `http://localhost:8000` for the complete web application featuring:
+- **File Upload**: Drag-and-drop interface with visual feedback and file validation
+- **Language Selection**: Bidirectional translation (English ↔ Hindi) with visual indicators
+- **Progress Tracking**: Real-time progress with step-by-step processing indicators
+- **Document Preview**: Formatted preview of translated content with editing capabilities
+- **Multiple Downloads**: PDF, DOCX, and TXT formats with professional templates
+- **Responsive Design**: Mobile-optimized interface with PNB Housing Finance branding
 
 ### REST API
 
-**Endpoint:** `POST /translate`
+#### Translation Endpoint: `POST /translate`
 
 **Request Body (JSON):**
 ```json
@@ -92,45 +106,110 @@ Navigate to `http://localhost:8000` for the integrated web interface with:
 ```
 
 **Parameters:**
-- `body`: Base64 encoded PDF file data
+- `body`: Base64 encoded PDF file data (max 15MB)
 - `target_lang`: Target language (`"hi"` for Hindi, `"en"` for English)
 - `template_choice`: Template type (currently only `"simplified"`)
 
+**Response (JSON):**
+```json
+{
+  "success": true,
+  "document_id": "req_1234567890",
+  "detected_language": "English",
+  "target_language": "Hindi",
+  "translated_document": "translated_text_content",
+  "processing_time": 25.67,
+  "message": "Document translated successfully"
+}
+```
+
+#### Document Generation Endpoint: `POST /download`
+
+**Request Body (JSON):**
+```json
+{
+  "translated_text": "document_content",
+  "source_lang": "English",
+  "target_lang": "Hindi",
+  "format": "pdf"
+}
+```
+
+**Parameters:**
+- `translated_text`: The translated document content
+- `source_lang`: Source language name
+- `target_lang`: Target language name
+- `format`: Output format (`"pdf"`, `"docx"`, or `"txt"`)
+
 **Response:**
-- Content-Type: `application/pdf`
-- Binary PDF data for download
+- Content-Type: Varies by format (application/pdf, application/vnd.openxmlformats-officedocument.wordprocessingml.document, text/plain)
+- Binary document data for download
+
+#### Additional Endpoints
+- `GET /` - Serves the web interface
+- `GET /health` - Service health check with configuration details
+- `GET /s3-status` - S3 connectivity and file count status
+- `POST /test-s3` - S3 upload functionality test
 
 **Example with curl:**
 ```bash
 # Convert PDF to base64 first
 base64_data=$(base64 -i sample.pdf)
 
-# Send translation request
+# Send translation request (returns JSON with translated text)
 curl -X POST "http://localhost:8000/translate" \
   -H "Content-Type: application/json" \
   -d "{
     \"body\": \"$base64_data\",
     \"target_lang\": \"hi\",
     \"template_choice\": \"simplified\"
+  }" > translation_result.json
+
+# Extract translated text and generate PDF
+translated_text=$(cat translation_result.json | jq -r '.translated_document')
+curl -X POST "http://localhost:8000/download" \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"translated_text\": \"$translated_text\",
+    \"source_lang\": \"English\",
+    \"target_lang\": \"Hindi\",
+    \"format\": \"pdf\"
   }" \
-  --output translated_document.pdf
+  --output professional_translation.pdf
 ```
 
-## Document Structure
+## Document Processing Capabilities
 
-The service extracts and preserves:
-- **Document title and headers**
-- **Section headings and content**
-- **Tables with headers and data**
-- **Footer information and notes**
+### Structure Preservation
+The service intelligently extracts and preserves:
+- **Document hierarchy**: Main titles, section headings (# ## ###), and subheadings
+- **Content formatting**: Paragraphs, bullet points, numbered lists
+- **Tables**: Headers, rows, and data with proper formatting
+- **Text emphasis**: Bold text (**text**) and other formatting markers
+- **Document metadata**: Source/target languages, processing information
 
-## Template Specifications
+### Professional Templates
 
-- **Page Format**: A4 with professional margins
-- **Fonts**: Noto Sans, DejaVu Sans, Arial fallback
-- **Styling**: Clean, enterprise-friendly design
-- **Tables**: Bordered with alternating row colors
-- **Headers/Footers**: Automatic page numbering
+#### PDF Generation (ReportLab)
+- **Page Format**: A4 with professional margins (72pt standard)
+- **Fonts**: Automatic Hindi font detection (Noto Sans/DejaVu Sans/Arial fallback)
+- **Branding**: PNB Housing Finance header with company logo placement
+- **Color Scheme**: Primary blue (#1e40af), secondary gray (#374151)
+- **Tables**: Professional grid styling with alternating row colors and borders
+- **Footer**: Confidentiality notice with automatic page numbering
+
+#### DOCX Generation (python-docx)
+- **Margins**: 1.0 inch on all sides for professional appearance
+- **Headers**: Company branding in document header section
+- **Metadata Table**: Translation information with processing details
+- **Styling**: Professional font hierarchy with proper spacing
+- **Tables**: Grid format with bold headers and consistent spacing
+- **Footer**: Confidentiality notice and service attribution
+
+#### TXT Generation
+- **Header**: Professional document header with metadata
+- **Content**: Clean text formatting with proper line breaks
+- **Footer**: Confidentiality notice and generation timestamp
 
 ## Error Handling
 
@@ -152,56 +231,175 @@ The service handles:
 
 ### Common Issues
 
-1. **WeasyPrint font errors:**
+1. **Font rendering issues (Hindi text):**
    ```bash
-   # Install additional fonts (Ubuntu/Debian)
-   sudo apt-get install fonts-noto fonts-dejavu-core
+   # Install Hindi fonts (Ubuntu/Debian)
+   sudo apt-get install fonts-noto-devanagari fonts-dejavu-core
+   
+   # macOS (install via Homebrew)
+   brew install --cask font-noto-sans-devanagari
+   
+   # Verify font installation
+   python -c "from reportlab.pdfbase import pdfmetrics; print('Fonts available:', pdfmetrics.getRegisteredFontNames())"
    ```
 
-2. **AWS Bedrock access denied:**
+2. **AWS Bedrock access issues:**
    ```bash
-   # Ensure your AWS credentials have Bedrock permissions
+   # Test Bedrock connectivity
    aws bedrock list-foundation-models --region us-east-1
+   
+   # Verify Claude 4.5 Opus access
+   aws bedrock get-foundation-model --model-identifier global.anthropic.claude-opus-4-5-20251101-v1:0
+   
+   # Check IAM permissions for Bedrock
+   aws iam get-user
    ```
 
-3. **Large file processing:**
-   - Ensure files are under 15MB
-   - Check available memory for PDF processing
+3. **S3 connectivity problems:**
+   ```bash
+   # Test S3 access
+   aws s3 ls s3://pnb-poc-docs/
+   
+   # Create bucket if needed
+   aws s3 mb s3://your-bucket-name
+   
+   # Set bucket permissions
+   aws s3api put-bucket-policy --bucket your-bucket-name --policy file://bucket-policy.json
+   ```
 
-### Development
+4. **Large file processing:**
+   - Ensure files are under 15MB limit
+   - Check available memory (minimum 2GB recommended)
+   - Monitor processing time (typical: 15-40 seconds)
+   - Use health endpoints to monitor system status
 
-**Run tests:**
+5. **Docker deployment issues:**
+   ```bash
+   # Check container logs
+   docker logs pdf-translator
+   
+   # Verify environment variables
+   docker exec pdf-translator env | grep -E "(BUCKET_NAME|MODEL_ID|AWS_)"
+   
+   # Test container health
+   docker exec pdf-translator curl http://localhost:8000/health
+   ```
+
+### Development & Testing
+
+**Test the complete workflow:**
 ```bash
-# Test the API endpoint
+# Test translation endpoint
 python -c "
 import requests
 import base64
+import json
 
+# Load and encode PDF
 with open('sample.pdf', 'rb') as f:
     pdf_data = base64.b64encode(f.read()).decode()
 
+# Translate document
 response = requests.post('http://localhost:8000/translate', json={
     'body': pdf_data,
     'target_lang': 'hi',
     'template_choice': 'simplified'
 })
 
-with open('output.pdf', 'wb') as f:
-    f.write(response.content)
+result = response.json()
+print(f'Translation completed in {result[\"processing_time\"]:.2f}s')
+
+# Generate PDF
+pdf_response = requests.post('http://localhost:8000/download', json={
+    'translated_text': result['translated_document'],
+    'source_lang': result['detected_language'],
+    'target_lang': result['target_language'],
+    'format': 'pdf'
+})
+
+with open('professional_translation.pdf', 'wb') as f:
+    f.write(pdf_response.content)
+
+print('Professional PDF generated successfully!')
 "
 ```
 
-## Recent Improvements
+**Test health endpoints:**
+```bash
+# Check service health
+curl http://localhost:8000/health
 
-- **Enhanced Claude Prompts**: Improved prompts for complete document translation
-- **Increased Token Limits**: Raised to 8000 tokens for longer documents
-- **Better Error Handling**: Comprehensive retry logic and error messages
-- **Progress Indicators**: Real-time feedback during translation process
-- **Document Statistics**: Word count, character count, and processing time
-- **Improved Formatting**: Better text structure and table rendering
-- **Post-processing**: Automatic cleanup of OCR artifacts and empty sections
-- **Mobile Responsive**: Optimized for mobile and tablet devices
+# Check S3 connectivity
+curl http://localhost:8000/s3-status
+
+# Test S3 upload functionality
+curl -X POST http://localhost:8000/test-s3
+```
+
+## Recent Enhancements
+
+### AI Processing Improvements
+- **Enhanced Claude Prompts**: Optimized prompts for complete document translation with structure preservation
+- **Increased Token Limits**: Raised to 12,000 tokens for comprehensive document processing
+- **Advanced Post-Processing**: Automatic cleanup of OCR artifacts, empty sections, and formatting normalization
+- **Language Detection**: Automatic source language detection from document content
+
+### User Experience Enhancements
+- **Modern Web Interface**: Complete redesign with PNB Housing Finance branding
+- **Real-Time Progress**: Step-by-step progress indicators with visual feedback
+- **In-Browser Editing**: Edit translated content before final download
+- **Multiple Format Support**: PDF, DOCX, and TXT output options
+- **Mobile Responsive**: Fully optimized for desktop, tablet, and mobile devices
+- **Document Statistics**: Word count, character count, and processing time display
+
+### Enterprise Features
+- **AWS S3 Integration**: Automatic file storage with metadata and audit trails
+- **Comprehensive Logging**: Structured logging with request IDs and performance metrics
+- **Health Monitoring**: Built-in health checks and S3 connectivity status
+- **Error Recovery**: Exponential backoff retry logic for API failures
+- **Professional Templates**: Branded document templates with consistent styling
+
+### Performance Optimizations
+- **Concurrent Processing**: Support for multiple simultaneous translations
+- **Memory Optimization**: Efficient handling of large documents and concurrent users
+- **Timeout Management**: Configurable timeouts with graceful error handling
+- **Font Management**: Automatic Hindi font detection and registration
+
+## Documentation
+
+### Additional Resources
+- **[API Documentation](API_DOCUMENTATION.md)**: Comprehensive API reference with examples
+- **[Deployment Guide](DEPLOYMENT_GUIDE.md)**: Production deployment instructions for various environments
+- **[Steering Files](.kiro/steering/)**: Project guidelines and technical specifications
+  - [Product Overview](.kiro/steering/product.md): Business requirements and value proposition
+  - [Technical Stack](.kiro/steering/tech.md): Technology choices and implementation details
+  - [Project Structure](.kiro/steering/structure.md): Architecture and file organization
+
+### Project Structure
+```
+├── app.py                      # Main FastAPI application
+├── index.html                  # Complete web interface
+├── pdf_generator.py            # ReportLab PDF generation
+├── docx_generator.py           # python-docx Word generation
+├── requirements.txt            # Python dependencies
+├── Dockerfile                  # Container configuration
+├── README.md                   # This file
+├── API_DOCUMENTATION.md        # Complete API reference
+├── DEPLOYMENT_GUIDE.md         # Production deployment guide
+└── .kiro/steering/             # Project documentation
+    ├── product.md              # Product overview and requirements
+    ├── tech.md                 # Technology stack and build system
+    └── structure.md            # Project structure and organization
+```
 
 ## License
 
 MIT License - see LICENSE file for details.
+
+## Support
+
+For technical support or questions:
+1. Check the [API Documentation](API_DOCUMENTATION.md) for usage examples
+2. Review the [Deployment Guide](DEPLOYMENT_GUIDE.md) for setup issues
+3. Examine the steering files in `.kiro/steering/` for project guidelines
+4. Use the health endpoints (`/health`, `/s3-status`) for system diagnostics
