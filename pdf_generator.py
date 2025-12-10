@@ -10,6 +10,8 @@ from reportlab.pdfbase.ttfonts import TTFont
 import io
 import re
 import os
+import urllib.request
+import tempfile
 
 def generate_pdf(title="Sample PDF Report",
                 body="This is a sample PDF generated using ReportLab.",
@@ -194,37 +196,189 @@ def generate_pdf(title="Sample PDF Report",
         buffer.seek(0)
         return buffer.getvalue()
 
-def register_hindi_fonts():
-    """Register Hindi-compatible fonts for PDF generation"""
+def register_dejavu_font():
+    """Register DejaVu Sans font which has good Unicode support"""
     try:
-        # Try to register system fonts that support Hindi
-        font_paths = [
-            '/System/Library/Fonts/Arial Unicode MS.ttf',  # macOS
-            '/usr/share/fonts/truetype/noto/NotoSansDevanagari-Regular.ttf',  # Linux
-            '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',  # Linux fallback
-            'C:\\Windows\\Fonts\\arial.ttf',  # Windows fallback
+        # DejaVu Sans paths in different systems
+        dejavu_paths = [
+            '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
+            '/usr/share/fonts/dejavu/DejaVuSans.ttf',
+            '/System/Library/Fonts/DejaVuSans.ttf',
+            'C:\\Windows\\Fonts\\DejaVuSans.ttf'
         ]
         
-        for font_path in font_paths:
-            if os.path.exists(font_path):
+        for path in dejavu_paths:
+            if os.path.exists(path):
                 try:
-                    pdfmetrics.registerFont(TTFont('HindiFont', font_path))
-                    return 'HindiFont'
-                except:
+                    pdfmetrics.registerFont(TTFont('DejaVuSans', path))
+                    return 'DejaVuSans'
+                    
+                except Exception as test_error:
                     continue
         
-        # If no system fonts found, use default with Unicode support
-        return 'Helvetica'
-        
+        return None
     except Exception as e:
-        print(f"Font registration warning: {e}")
-        return 'Helvetica'
+        return None
+
+def clean_text_for_pdf(text):
+    """Clean text to remove characters that might not render properly"""
+    if not text:
+        return ""
+    
+    # Replace problematic characters that show as black boxes
+    replacements = {
+        '■': '',  # Remove black box characters (these are showing in your output)
+        '□': '',  # Remove empty box characters
+        '\uf0b7': '•',  # Replace bullet character
+        '\u2022': '•',  # Standard bullet
+        '\u25cf': '•',  # Black circle to bullet
+        '\u25a0': '',  # Black square
+        '\u25a1': '',  # White square
+        '\ufffd': '',  # Replacement character (indicates encoding issues)
+    }
+    
+    cleaned_text = text
+    for old_char, new_char in replacements.items():
+        cleaned_text = cleaned_text.replace(old_char, new_char)
+    
+    # Remove any remaining control characters or problematic Unicode
+    import re
+    cleaned_text = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x84\x86-\x9f]', '', cleaned_text)
+    
+    # Also remove any remaining box-drawing characters that might cause issues
+    cleaned_text = re.sub(r'[\u2500-\u257F]', '', cleaned_text)  # Box drawing characters
+    cleaned_text = re.sub(r'[\u2580-\u259F]', '', cleaned_text)  # Block elements
+    
+    return cleaned_text
+
+def register_hindi_fonts():
+    """Register Hindi-compatible fonts for PDF generation"""
+    
+    # Try DejaVu Sans first (most reliable for Unicode)
+    dejavu_font = register_dejavu_font()
+    if dejavu_font:
+        return dejavu_font
+    
+    # List of font paths to try (in order of preference)
+    import os
+    home_dir = os.path.expanduser("~")
+    
+    font_candidates = [
+        # User's Noto fonts (macOS - highest priority)
+        (f'{home_dir}/Library/Fonts/NotoSansDevanagari-Regular.ttf', 'NotoDevanagari'),
+        (f'{home_dir}/Library/Fonts/NotoSansDevanagariUI-Regular.ttf', 'NotoDevanagariUI'),
+        
+        # System Noto fonts (Linux)
+        ('/usr/share/fonts/truetype/noto/NotoSansDevanagari-Regular.ttf', 'NotoDevanagariSystem'),
+        ('/usr/share/fonts/noto/NotoSansDevanagari-Regular.ttf', 'NotoDevanagariSystem2'),
+        
+        # macOS system fonts with Devanagari support
+        ('/System/Library/Fonts/Supplemental/DevanagariMT.ttc', 'DevanagariMT'),
+        ('/System/Library/Fonts/Supplemental/ITFDevanagari.ttc', 'ITFDevanagari'),
+        ('/System/Library/Fonts/Supplemental/Devanagari Sangam MN.ttc', 'DevanagariSangam'),
+        
+        # Other good Unicode fonts
+        ('/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf', 'LiberationSans'),
+        ('/System/Library/Fonts/Arial Unicode MS.ttf', 'ArialUnicode'),
+        ('/Library/Fonts/Arial Unicode MS.ttf', 'ArialUnicode2'),
+        
+        # Windows fonts
+        ('C:\\Windows\\Fonts\\arial.ttf', 'WindowsArial'),
+    ]
+    
+    for font_path, font_name in font_candidates:
+        if os.path.exists(font_path):
+            try:
+                pdfmetrics.registerFont(TTFont(font_name, font_path))
+                return font_name
+            except Exception as e:
+                continue
+    
+    # Final fallback - use Helvetica
+    return 'Helvetica'
+
+def wrap_hindi_text_with_font(text, font_name):
+    """Wrap Hindi text segments with explicit font tags"""
+    if not text or font_name == 'Helvetica':
+        return text
+    
+    import re
+    
+    # Find Hindi text segments (Devanagari script)
+    def replace_hindi(match):
+        hindi_text = match.group(0)
+        return f'<font name="{font_name}">{hindi_text}</font>'
+    
+    # Pattern to match Devanagari characters (Hindi script)
+    hindi_pattern = r'[\u0900-\u097F]+'
+    
+    # Replace Hindi segments with font-wrapped versions
+    wrapped_text = re.sub(hindi_pattern, replace_hindi, text)
+    
+    return wrapped_text
+
+def safe_text_for_pdf(text, font_name='Helvetica'):
+    """Ensure text is properly encoded for PDF generation"""
+    if not text:
+        return ""
+    
+    try:
+        # Ensure text is properly encoded as UTF-8
+        if isinstance(text, bytes):
+            text = text.decode('utf-8')
+        
+        # Clean problematic characters first
+        text = clean_text_for_pdf(text)
+        
+        # For Hindi text, ensure proper Unicode normalization
+        import unicodedata
+        text = unicodedata.normalize('NFC', text)
+        
+        # Wrap Hindi text with explicit font tags to force correct rendering
+        if font_name != 'Helvetica':
+            text = wrap_hindi_text_with_font(text, font_name)
+        
+        return text
+    except Exception as e:
+        return str(text)
+
+def create_fonts_directory():
+    """Create fonts directory and download essential Hindi font"""
+    try:
+        # Create fonts directory
+        fonts_dir = os.path.join(os.path.dirname(__file__), 'fonts')
+        os.makedirs(fonts_dir, exist_ok=True)
+        
+        # Use a more reliable font source - Noto Sans from Google Fonts
+        font_filename = 'NotoSans-Regular.ttf'
+        font_path = os.path.join(fonts_dir, font_filename)
+        
+        return fonts_dir
+    except Exception as e:
+        return None
+
+def check_hindi_text(text):
+    """Check if text contains Hindi characters"""
+    if not text:
+        return False
+    
+    # Check for Devanagari script characters (Hindi)
+    for char in text:
+        if 0x0900 <= ord(char) <= 0x097F:  # Devanagari Unicode range
+            return True
+    return False
 
 def generate_pdf_from_translation(translated_text, source_lang="English", target_lang="Hindi"):
     """Generate professional PDF document from translation results"""
     
-    # Register Hindi fonts
-    hindi_font = register_hindi_fonts()
+    # Check if we have Hindi text
+    has_hindi = check_hindi_text(translated_text)
+    
+    # Register fonts
+    selected_font = register_hindi_fonts()
+    
+    # Ensure text is properly encoded
+    translated_text = safe_text_for_pdf(translated_text, selected_font)
     
     # Create in-memory PDF
     buffer = io.BytesIO()
@@ -234,54 +388,72 @@ def generate_pdf_from_translation(translated_text, source_lang="English", target
     
     styles = getSampleStyleSheet()
     
-    # Professional styles with Hindi font support
+    # For bold text, try to register a bold version or use the same font
+    selected_font_bold = selected_font
+    
+    # If we have a Hindi font, try to register bold version
+    if selected_font == 'NotoDevanagari':
+        try:
+            # Try to find and register bold version
+            home_dir = os.path.expanduser("~")
+            bold_font_path = f'{home_dir}/Library/Fonts/NotoSansDevanagari-Bold.ttf'
+            if os.path.exists(bold_font_path):
+                pdfmetrics.registerFont(TTFont('NotoDevanagariBold', bold_font_path))
+                selected_font_bold = 'NotoDevanagariBold'
+        except Exception as e:
+            selected_font_bold = selected_font
+    
     title_style = ParagraphStyle(
         'ProfessionalTitle',
-        parent=styles['Heading1'],
         fontSize=22,
         spaceAfter=30,
         alignment=TA_CENTER,
         textColor=colors.HexColor('#1e40af'),
-        fontName=hindi_font if target_lang == "Hindi" else 'Helvetica-Bold'
+        fontName=selected_font_bold,
+        leading=26,
+        wordWrap='LTR'  # Ensure proper text direction
     )
     
     heading_style = ParagraphStyle(
         'ProfessionalHeading',
-        parent=styles['Heading2'],
         fontSize=16,
         spaceAfter=15,
         spaceBefore=20,
         textColor=colors.HexColor('#1e40af'),
-        fontName=hindi_font if target_lang == "Hindi" else 'Helvetica-Bold'
+        fontName=selected_font_bold,
+        leading=20,
+        wordWrap='LTR'
     )
     
     subheading_style = ParagraphStyle(
         'ProfessionalSubHeading',
-        parent=styles['Heading3'],
         fontSize=14,
         spaceAfter=12,
         spaceBefore=15,
         textColor=colors.HexColor('#374151'),
-        fontName=hindi_font if target_lang == "Hindi" else 'Helvetica-Bold'
+        fontName=selected_font_bold,
+        leading=18,
+        wordWrap='LTR'
     )
     
     body_style = ParagraphStyle(
         'ProfessionalBody',
-        parent=styles['Normal'],
         fontSize=12,
         spaceAfter=12,
         alignment=TA_JUSTIFY,
-        fontName=hindi_font if target_lang == "Hindi" else 'Helvetica',
-        leading=18
+        fontName=selected_font,
+        leading=18,
+        wordWrap='LTR'
     )
     
     meta_style = ParagraphStyle(
         'MetaData',
-        parent=styles['Normal'],
         fontSize=10,
         spaceAfter=8,
-        fontName=hindi_font if target_lang == "Hindi" else 'Helvetica',
-        textColor=colors.HexColor('#6b7280')
+        fontName=selected_font,
+        textColor=colors.HexColor('#6b7280'),
+        leading=12,
+        wordWrap='LTR'
     )
     
     story = []
@@ -308,45 +480,12 @@ def generate_pdf_from_translation(translated_text, source_lang="English", target
             doc_title = line.replace('#', '').strip()
             break
     
-    # DOCUMENT TITLE
-    story.append(Paragraph(doc_title, title_style))
+    # DOCUMENT TITLE (if extracted from content)
+    if doc_title and doc_title != "Professional Translation Document":
+        story.append(Paragraph(doc_title, title_style))
+        story.append(Spacer(1, 20))
     
-    # METADATA SECTION
-    story.append(Paragraph("Translation Information", heading_style))
-    
-    # Create metadata table
-    meta_data = [
-        ["Source Language:", source_lang],
-        ["Target Language:", target_lang],
-        ["Translation Method:", "AI-Powered Professional Translation"],
-        ["Processing Engine:", "AWS Bedrock Claude 4.5"],
-        ["Document Status:", "Verified Professional Translation"],
-        ["Generated:", "Automated Translation Service"]
-    ]
-    
-    meta_table = Table(meta_data, colWidths=[2.5*inch, 3.5*inch])
-    meta_table.setStyle(TableStyle([
-        ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
-        ('FONTNAME', (1, 0), (1, -1), 'Helvetica'),
-        ('FONTSIZE', (0, 0), (-1, -1), 10),
-        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-        ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#f8fafc')),
-        ('BOX', (0, 0), (-1, -1), 1, colors.HexColor('#e5e7eb')),
-        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#d1d5db')),
-        ('LEFTPADDING', (0, 0), (-1, -1), 12),
-        ('RIGHTPADDING', (0, 0), (-1, -1), 12),
-        ('TOPPADDING', (0, 0), (-1, -1), 8),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
-    ]))
-    
-    story.append(meta_table)
-    story.append(Spacer(1, 30))
-    
-    # TRANSLATED CONTENT SECTION
-    story.append(Paragraph("Translated Document", heading_style))
-    
-    # Process translated content with proper formatting
+    # Process translated content with improved formatting
     for line in lines:
         if not line:
             story.append(Spacer(1, 6))
@@ -354,11 +493,14 @@ def generate_pdf_from_translation(translated_text, source_lang="English", target
             
         # Handle headers
         if line.startswith('# '):
-            story.append(Paragraph(line[2:], title_style))
+            safe_title = safe_text_for_pdf(line[2:], selected_font)
+            story.append(Paragraph(safe_title, title_style))
         elif line.startswith('## '):
-            story.append(Paragraph(line[3:], heading_style))
+            safe_heading = safe_text_for_pdf(line[3:], selected_font)
+            story.append(Paragraph(safe_heading, heading_style))
         elif line.startswith('### '):
-            story.append(Paragraph(line[4:], subheading_style))
+            safe_subheading = safe_text_for_pdf(line[4:], selected_font)
+            story.append(Paragraph(safe_subheading, subheading_style))
         # Handle lists
         elif line.strip().startswith(('•', '-', '*')):
             bullet_style = ParagraphStyle(
@@ -366,16 +508,20 @@ def generate_pdf_from_translation(translated_text, source_lang="English", target
                 parent=body_style,
                 leftIndent=20,
                 bulletIndent=10,
-                bulletFontName='Symbol'
+                bulletFontName='Symbol',
+                fontName=selected_font
             )
-            story.append(Paragraph(f"• {line.strip()[1:].strip()}", bullet_style))
+            safe_bullet = safe_text_for_pdf(f"• {line.strip()[1:].strip()}", selected_font)
+            story.append(Paragraph(safe_bullet, bullet_style))
         elif line.strip().startswith(tuple(f'{i}.' for i in range(1, 10))):
             number_style = ParagraphStyle(
                 'NumberedList',
                 parent=body_style,
-                leftIndent=20
+                leftIndent=20,
+                fontName=selected_font
             )
-            story.append(Paragraph(line.strip(), number_style))
+            safe_number = safe_text_for_pdf(line.strip(), selected_font)
+            story.append(Paragraph(safe_number, number_style))
         # Handle tables
         elif '|' in line and len(line.split('|')) > 2:
             table_style = ParagraphStyle(
@@ -388,9 +534,11 @@ def generate_pdf_from_translation(translated_text, source_lang="English", target
             story.append(Paragraph(line, table_style))
         # Regular paragraphs
         else:
-            # Handle bold text
+            # Handle bold text and ensure proper encoding
             formatted_line = line.replace('**', '<b>', 1).replace('**', '</b>', 1)
-            story.append(Paragraph(formatted_line, body_style))
+            safe_line = safe_text_for_pdf(formatted_line, selected_font)
+            
+            story.append(Paragraph(safe_line, body_style))
     
     # FOOTER HANDLER
     def add_professional_footer(canvas, doc):

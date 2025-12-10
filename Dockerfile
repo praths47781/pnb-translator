@@ -1,6 +1,6 @@
 FROM python:3.11-slim
 
-# Install system dependencies for WeasyPrint
+# Install system dependencies and Hindi fonts
 RUN apt-get update && apt-get install -y \
     libpango-1.0-0 \
     libharfbuzz0b \
@@ -11,6 +11,10 @@ RUN apt-get update && apt-get install -y \
     libgtk-3-0 \
     fonts-dejavu-core \
     fonts-noto \
+    fonts-noto-devanagari \
+    fonts-liberation \
+    fontconfig \
+    && fc-cache -fv \
     && rm -rf /var/lib/apt/lists/*
 
 # Set working directory

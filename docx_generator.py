@@ -66,9 +66,9 @@ def generate_docx_from_translation(translated_text, source_lang="English", targe
     run.font.size = Pt(12)
     run.font.bold = True
     
-    # Extract document title from translated text
+    # Extract document title from translated text (optional)
     lines = [line.strip() for line in translated_text.split('\n') if line.strip()]
-    doc_title = "Professional Translation Document"
+    doc_title = None
     
     # Look for title in first few lines
     for line in lines[:3]:
@@ -76,42 +76,12 @@ def generate_docx_from_translation(translated_text, source_lang="English", targe
             doc_title = line.replace('#', '').strip()
             break
     
-    # DOCUMENT TITLE
-    title_para = doc.add_heading(doc_title, level=1)
-    title_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    title_run = title_para.runs[0]
-    title_run.font.size = Pt(18)
-    
-    # TRANSLATION METADATA SECTION
-    doc.add_heading("Translation Information", level=2)
-    
-    # Create professional metadata table
-    meta_table = doc.add_table(rows=5, cols=2)
-    meta_table.style = 'Table Grid'
-    
-    # Metadata content
-    metadata = [
-        ("Source Language:", source_lang),
-        ("Target Language:", target_lang),
-        ("Translation Method:", "AI-Powered Professional Translation"),
-        ("Processing Engine:", "AWS Bedrock Claude 4.5"),
-        ("Document Status:", "Verified Translation")
-    ]
-    
-    for i, (label, value) in enumerate(metadata):
-        meta_table.cell(i, 0).text = label
-        meta_table.cell(i, 1).text = value
-        
-        # Make labels bold
-        for paragraph in meta_table.cell(i, 0).paragraphs:
-            for run in paragraph.runs:
-                run.font.bold = True
-    
-    # Add spacing
-    doc.add_paragraph()
-    
-    # TRANSLATED CONTENT SECTION
-    doc.add_heading("Translated Document", level=2)
+    # Add document title only if found and meaningful
+    if doc_title and doc_title not in ["Professional Translation Document", "Translation Information"]:
+        title_para = doc.add_heading(doc_title, level=1)
+        title_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        title_run = title_para.runs[0]
+        title_run.font.size = Pt(18)
     
     # Process the translated text with proper formatting
     i = 0
