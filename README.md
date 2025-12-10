@@ -8,6 +8,10 @@ A FastAPI-based service that translates PDF documents using AWS Bedrock (Claude 
 - **Professional Templates**: Generates clean, formatted PDFs with consistent styling
 - **Web Interface**: Integrated HTML frontend with drag-and-drop file upload
 - **Document Structure Preservation**: Maintains headings, sections, and tables
+- **Real-time Progress**: Visual progress indicators and step-by-step feedback
+- **Document Editing**: Edit translated content before download
+- **Multiple Formats**: Download as PDF or TXT
+- **Enhanced Formatting**: Improved text structure and table handling
 - **Fast Processing**: 15-40 seconds for translation, <2 seconds for PDF generation
 
 ## Prerequisites
@@ -35,8 +39,8 @@ A FastAPI-based service that translates PDF documents using AWS Bedrock (Claude 
 
 3. **Set environment variables:**
    ```bash
-   export MODEL_ID="us.anthropic.claude-sonnet-4-20250514-v1:0"
-   export BUCKET_NAME="your-bucket-name"  # Optional
+   export MODEL_ID="global.anthropic.claude-opus-4-5-20251101-v1:0"
+   export BUCKET_NAME="pnb-poc-docs"
    ```
 
 4. **Run the service:**
@@ -186,6 +190,17 @@ with open('output.pdf', 'wb') as f:
     f.write(response.content)
 "
 ```
+
+## Recent Improvements
+
+- **Enhanced Claude Prompts**: Improved prompts for complete document translation
+- **Increased Token Limits**: Raised to 8000 tokens for longer documents
+- **Better Error Handling**: Comprehensive retry logic and error messages
+- **Progress Indicators**: Real-time feedback during translation process
+- **Document Statistics**: Word count, character count, and processing time
+- **Improved Formatting**: Better text structure and table rendering
+- **Post-processing**: Automatic cleanup of OCR artifacts and empty sections
+- **Mobile Responsive**: Optimized for mobile and tablet devices
 
 ## License
 
