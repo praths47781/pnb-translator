@@ -2,11 +2,11 @@
 
 ## Enterprise PDF Translation Service with Professional Document Generation
 
-A comprehensive FastAPI-based web application that processes PDF documents through AWS Bedrock (Claude 4.5 Opus) to extract, translate, and regenerate content using professional templates with PNB Housing Finance branding.
+A comprehensive FastAPI-based web application that processes PDF documents through AWS Bedrock with multi-model support (Claude 4.5 Opus and Amazon Nova 2 Lite) to extract, translate, and regenerate content using professional templates with PNB Housing Finance branding.
 
 ### Core Functionality
 - **Real-Time Streaming Interface**: Modern web application with live translation streaming via Server-Sent Events
-- **AI-Powered Translation**: Claude 4.5 Opus for intelligent OCR extraction, structure detection, and English↔Hindi translation
+- **Multi-Model AI Translation**: Choose between Claude 4.5 Opus (advanced reasoning) and Amazon Nova 2 Lite (fast processing) for intelligent OCR extraction, structure detection, and English↔Hindi translation
 - **Multiple Output Formats**: Generate professional PDFs, Word documents (DOCX), and text files with instant generation
 - **Document Editing**: In-browser editing capabilities with live preview before final download
 - **Cloud Integration**: AWS S3 storage with background uploads for file management and archival

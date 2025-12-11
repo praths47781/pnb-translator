@@ -2,11 +2,11 @@
 
 ## Core Technologies
 - **Backend Framework**: FastAPI (Python 3.11) with comprehensive logging
-- **AI/ML Service**: AWS Bedrock Runtime SDK (boto3) with Claude 4.5 Opus
-- **PDF Generation**: ReportLab for professional PDF creation
+- **AI/ML Service**: AWS Bedrock Runtime SDK (boto3) with multi-model support (Claude 4.5 Opus and Amazon Nova 2 Lite)
+- **PDF Generation**: ReportLab for professional PDF creation with enhanced HTML tag handling
 - **DOCX Generation**: python-docx for Word document creation
 - **Cloud Storage**: AWS S3 for file management and archival
-- **Containerization**: Docker with system dependencies for fonts
+- **Containerization**: Docker with system dependencies for fonts and multi-model support
 
 ## Key Dependencies
 ```
@@ -19,10 +19,11 @@ reportlab==4.0.7
 ```
 
 ## AWS Integration Architecture
-- **Bedrock Runtime**: `invoke_model` with Claude 4.5 Opus for document processing
+- **Bedrock Runtime**: Multi-model support with `invoke_model` and `invoke_model_with_response_stream` for Claude 4.5 Opus and Amazon Nova 2 Lite
+- **Model Selection**: Dynamic model switching with optimized configurations per model
 - **S3 Storage**: File archival in input/ and output/ folders with metadata
-- **Document Processing**: PDF bytes passed directly to Claude with document context
-- **Response Handling**: Raw text extraction with post-processing cleanup
+- **Document Processing**: PDF bytes passed to selected AI model with model-specific formatting (document-first for Nova, optimized prompts for Claude)
+- **Response Handling**: Model-aware text extraction with enhanced post-processing (markdown for Claude, HTML tag cleanup for Nova)
 - **Retry Logic**: Exponential backoff for API failures and timeout handling
 - **Regional Configuration**: Multi-region support with configurable endpoints
 
@@ -36,13 +37,24 @@ pip install -r requirements.txt
 # Run development server
 uvicorn app:app --reload --host 0.0.0.0 --port 8000
 
-# Test API endpoint (JSON body with base64 file)
+# Test API endpoint (JSON body with base64 file and model selection)
 curl -X POST "http://localhost:8000/translate" \
   -H "Content-Type: application/json" \
   -d '{
     "body": "base64_encoded_pdf_data",
     "target_lang": "hi",
-    "template_choice": "simplified"
+    "template_choice": "simplified",
+    "model_choice": "claude-opus"
+  }'
+
+# Test streaming endpoint with Nova model
+curl -X POST "http://localhost:8000/translate-stream" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "body": "base64_encoded_pdf_data",
+    "target_lang": "hi",
+    "template_choice": "simplified",
+    "model_choice": "nova-2-lite"
   }'
 ```
 
@@ -72,20 +84,26 @@ open http://localhost:8000
 ```
 
 ## Performance Requirements
-- **Translation Processing**: 15-40 seconds for typical documents
-- **Document Generation**: Under 2 seconds for PDF/DOCX creation
+
+### Multi-Model Performance Characteristics
+- **Claude 4.5 Opus**: 20-45 seconds for comprehensive analysis and superior structure preservation
+- **Amazon Nova 2 Lite**: 10-25 seconds for fast processing with good quality output
+- **Document Generation**: Under 2 seconds for PDF/DOCX creation with enhanced error handling
 - **File Size Limit**: 15MB maximum per upload
-- **Concurrent Processing**: Multiple simultaneous translations supported
-- **Memory Usage**: Optimized for cloud deployment environments
+- **Concurrent Processing**: Multiple simultaneous translations supported across both models
+- **Memory Usage**: Optimized for cloud deployment environments with model-specific configurations
 - **API Timeout**: 5-minute timeout for Bedrock calls with retry logic
+- **Streaming Performance**: Real-time chunk delivery for both models with model-aware processing
 
 ## Error Handling & Monitoring
-1. **Bedrock API Failures**: Exponential backoff retry with detailed logging
+1. **Multi-Model API Failures**: Exponential backoff retry with model-specific error handling and detailed logging
 2. **File Processing Errors**: Size validation, format verification, corruption detection
 3. **S3 Integration Issues**: Graceful degradation when storage is unavailable
-4. **Document Generation Failures**: Fallback options and user-friendly error messages
-5. **Font and Encoding Issues**: Automatic font detection and Unicode handling
+4. **Document Generation Failures**: Enhanced PDF generation with HTML tag cleanup, fallback options for both Claude and Nova outputs
+5. **Font and Encoding Issues**: Automatic font detection and Unicode handling with improved ReportLab compatibility
 6. **Network Timeouts**: Configurable timeouts with progress feedback
+7. **Model Selection Errors**: Automatic fallback to default model with user notification
+8. **HTML Tag Processing**: Robust handling of Nova's HTML-like output with proper tag cleanup and conversion
 
 ## Logging & Observability
 - **Structured Logging**: JSON-formatted logs with request IDs and timestamps

@@ -6,11 +6,13 @@ This guide covers deployment options for the PDF Translation Service with real-t
 
 ## Production Optimizations (v2.0)
 
-### Performance Features
-- **Real-Time Streaming**: Server-Sent Events for live translation feedback
+### Multi-Model Performance Features
+- **Real-Time Streaming**: Server-Sent Events for live translation feedback with both Claude and Nova models
+- **Model Selection**: Choose between Claude 4.5 Opus (advanced reasoning) and Amazon Nova 2 Lite (fast processing)
 - **Optimized Logging**: Minimal production logging for EC2 deployment
 - **Background Processing**: Non-blocking S3 uploads and document generation
 - **Memory Optimization**: Efficient handling of concurrent users and large documents
+- **Enhanced PDF Generation**: Robust handling of both Claude markdown and Nova HTML outputs
 - **Retry Logic**: Fixed duplicate processing issues with proper retry loop handling
 
 ## Prerequisites
@@ -126,7 +128,7 @@ docker images | grep pdf-translator
 
 ### 2. Run Docker Container
 ```bash
-# Run with environment variables
+# Run with environment variables (multi-model support)
 docker run -d \
   --name pdf-translator \
   -p 8000:8000 \

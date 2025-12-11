@@ -1,19 +1,19 @@
 # Enterprise PDF Translation Service
 
-A production-ready FastAPI-based web application that translates PDF documents using AWS Bedrock (Claude 4.5 Opus) with real-time streaming and generates professionally formatted documents with PNB Housing Finance branding.
+A production-ready FastAPI-based web application that translates PDF documents using AWS Bedrock with multi-model support (Claude 4.5 Opus and Amazon Nova 2 Lite) featuring real-time streaming and professional document generation with PNB Housing Finance branding.
 
 ## Features
 
 ### Core Translation Capabilities
 - **🔄 Real-Time Streaming Translation**: Live translation with Server-Sent Events showing text as it's generated
-- **🤖 AI-Powered Translation**: Uses Claude 4.5 Opus for intelligent OCR extraction and English↔Hindi translation
+- **🤖 Multi-Model AI Translation**: Choose between Claude 4.5 Opus (advanced reasoning) and Amazon Nova 2 Lite (fast processing) for intelligent OCR extraction and English↔Hindi translation
 - **📋 Document Structure Preservation**: Maintains headings, sections, tables, lists, and formatting hierarchy
 - **📄 Multiple Output Formats**: Generate professional PDFs, Word documents (DOCX), and text files
 - **🎨 Professional Templates**: PNB Housing Finance branded documents with consistent enterprise styling
 - **🔤 Hindi Font Support**: Automatic font detection and registration for proper Hindi text rendering
 
 ### Web Application Features
-- **🌐 Modern Web Interface**: Responsive design with drag-and-drop file upload and real-time feedback
+- **🌐 Modern Web Interface**: Responsive design with drag-and-drop file upload, model selection, and real-time feedback
 - **📊 Live Progress Tracking**: Real-time streaming with visual progress indicators and chunk counters
 - **✏️ In-Browser Document Editing**: Edit translated content before final download with live preview
 - **⬇️ Multiple Download Options**: PDF, DOCX, and TXT formats with professional formatting
@@ -32,7 +32,7 @@ A production-ready FastAPI-based web application that translates PDF documents u
 - Python 3.11+
 - AWS CLI configured with Bedrock access
 - Environment variables:
-  - `MODEL_ID` (optional): Claude model ID (default: `us.anthropic.claude-sonnet-4-20250514-v1:0`)
+  - `MODEL_ID` (optional): Default model ID (default: `global.anthropic.claude-opus-4-5-20251101-v1:0`)
   - `BUCKET_NAME` (optional): S3 bucket for file storage
 
 ## Quick Start
@@ -87,6 +87,7 @@ A production-ready FastAPI-based web application that translates PDF documents u
 ### Web Interface
 Navigate to `http://localhost:8000` for the complete web application featuring:
 - **File Upload**: Drag-and-drop interface with visual feedback and file validation
+- **Model Selection**: Choose between Claude 4.5 Opus (advanced reasoning) and Amazon Nova 2 Lite (fast processing)
 - **Language Selection**: Bidirectional translation (English ↔ Hindi) with visual indicators
 - **Progress Tracking**: Real-time progress with step-by-step processing indicators
 - **Document Preview**: Formatted preview of translated content with editing capabilities
@@ -368,7 +369,14 @@ curl http://localhost:8000/s3-status
 curl -X POST http://localhost:8000/test-s3
 ```
 
-## Recent Enhancements (v2.0)
+## Recent Enhancements (v2.0) - Multi-Model Support
+
+### 🤖 Multi-Model AI Translation
+- **Claude 4.5 Opus**: Advanced reasoning and comprehensive document analysis with superior structure preservation
+- **Amazon Nova 2 Lite**: Fast and efficient multimodal processing optimized for speed and cost-effectiveness
+- **Model Selection UI**: Easy switching between models with performance indicators and recommendations
+- **Optimized Prompts**: Model-specific prompts following Amazon Nova multimodal guidelines and Claude best practices
+- **Enhanced Processing**: Handles both Claude's markdown output and Nova's HTML-like formatting seamlessly
 
 ### 🔄 Real-Time Streaming Translation
 - **Server-Sent Events**: Live translation streaming with immediate feedback as text is generated
@@ -377,11 +385,12 @@ curl -X POST http://localhost:8000/test-s3
 - **Duplicate Prevention**: Fixed retry loop issues that caused duplicate processing
 
 ### 🤖 AI Processing Improvements
-- **Enhanced Claude Prompts**: Optimized prompts for complete document translation with structure preservation
-- **Increased Token Limits**: Raised to 64,000 tokens for comprehensive document processing
-- **Advanced Post-Processing**: Automatic cleanup of OCR artifacts, empty sections, and formatting normalization
+- **Multi-Model Architecture**: Support for Claude 4.5 Opus and Amazon Nova 2 Lite with model-specific optimizations
+- **Enhanced Prompts**: Following Amazon Nova multimodal guidelines and Claude best practices for complete document translation
+- **Increased Token Limits**: Up to 64,000 tokens (Claude) and 40,000 tokens (Nova) for comprehensive document processing
+- **Advanced Post-Processing**: Model-aware cleanup of OCR artifacts, HTML tag handling, and formatting normalization
 - **Language Detection**: Automatic source language detection from document content
-- **Model Optimization**: Switched to Claude 4.5 Sonnet for improved performance
+- **Robust PDF Generation**: Enhanced error handling for both Claude markdown and Nova HTML outputs
 
 ### 🎨 User Experience Enhancements
 - **Real-Time Translation Display**: Live streaming text appears as it's translated

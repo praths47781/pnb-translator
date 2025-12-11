@@ -17,14 +17,15 @@ The service uses AWS credentials for Bedrock and S3 access. No additional API au
 ### 1. Streaming Translation (Recommended)
 **POST /translate-stream**
 
-Real-time streaming translation with Server-Sent Events for live feedback.
+Real-time streaming translation with Server-Sent Events for live feedback. Supports multiple AI models.
 
 **Request Body:**
 ```json
 {
   "body": "base64_encoded_pdf_data",
   "target_lang": "hi",
-  "template_choice": "simplified"
+  "template_choice": "simplified",
+  "model_choice": "claude-opus"
 }
 ```
 
@@ -32,6 +33,7 @@ Real-time streaming translation with Server-Sent Events for live feedback.
 - `body` (string, required): Base64 encoded PDF file data (max 15MB)
 - `target_lang` (string, required): Target language (`"hi"` for Hindi, `"en"` for English)
 - `template_choice` (string, optional): Template type (default: `"simplified"`)
+- `model_choice` (string, optional): AI model (`"claude-opus"` for advanced reasoning, `"nova-2-lite"` for fast processing, default: `"claude-opus"`)
 
 **Response:**
 - Content-Type: `text/event-stream`
@@ -114,7 +116,37 @@ eventSource.onmessage = function(event) {
 
 ---
 
-### 2. Web Interface
+### 2. Available Models
+**GET /models**
+
+Returns list of available AI models for translation.
+
+**Response:**
+```json
+{
+  "models": [
+    {
+      "id": "claude-opus",
+      "name": "Claude 4.5 Opus",
+      "description": "Advanced reasoning and document analysis",
+      "provider": "Anthropic",
+      "model_id": "global.anthropic.claude-opus-4-5-20251101-v1:0"
+    },
+    {
+      "id": "nova-2-lite",
+      "name": "Amazon Nova 2 Lite", 
+      "description": "Fast and efficient multimodal processing",
+      "provider": "Amazon",
+      "model_id": "global.amazon.nova-2-lite-v1:0"
+    }
+  ],
+  "default": "claude-opus"
+}
+```
+
+---
+
+### 3. Web Interface
 **GET /**
 
 Serves the main web application interface.
@@ -195,14 +227,15 @@ Tests S3 upload functionality with a small test file.
 ### 5. Document Translation
 **POST /translate**
 
-Translates a PDF document using Claude 4.5 Opus.
+Translates a PDF document using selected AI model (Claude 4.5 Opus or Amazon Nova 2 Lite).
 
 **Request Body:**
 ```json
 {
   "body": "base64_encoded_pdf_data",
   "target_lang": "hi",
-  "template_choice": "simplified"
+  "template_choice": "simplified",
+  "model_choice": "claude-opus"
 }
 ```
 
@@ -212,6 +245,9 @@ Translates a PDF document using Claude 4.5 Opus.
   - `"hi"` for Hindi
   - `"en"` for English
 - `template_choice` (string, optional): Template type (default: "simplified")
+- `model_choice` (string, optional): AI model selection
+  - `"claude-opus"` for Claude 4.5 Opus (advanced reasoning, default)
+  - `"nova-2-lite"` for Amazon Nova 2 Lite (fast processing)
 
 **Response:**
 ```json
@@ -404,7 +440,8 @@ async function translateDocument(file) {
         body: JSON.stringify({
             body: base64,
             target_lang: 'hi',
-            template_choice: 'simplified'
+            template_choice: 'simplified',
+            model_choice: 'claude-opus'
         })
     });
     

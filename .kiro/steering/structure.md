@@ -18,7 +18,7 @@ README.md               # Complete setup and usage guide
 - FastAPI application with production-optimized logging and CORS
 - Multiple endpoints: `/translate-stream`, `/translate`, `/download`, `/health`, `/s3-status`
 - AWS Bedrock Runtime SDK with streaming support and fixed retry logic
-- Claude 4.5 Opus model invocation with real-time streaming capabilities
+- Multi-model support: Claude 4.5 Opus and Amazon Nova 2 Lite with real-time streaming capabilities
 - S3 integration with background uploads for file storage and management
 - Base64 file handling with 15MB size limits and memory optimization
 - Advanced error handling, status monitoring, and production logging
@@ -28,6 +28,7 @@ README.md               # Complete setup and usage guide
 - Modern responsive UI with PNB Housing Finance branding and animations
 - Drag-and-drop file upload with visual feedback and real-time streaming
 - Live translation display with Server-Sent Events integration
+- Model selection (Claude 4.5 Opus vs Amazon Nova 2 Lite) with performance indicators
 - Language selection (English ↔ Hindi) with visual icons and progress tracking
 - In-browser document editing capabilities with live preview
 - Multiple download formats (PDF, DOCX, TXT) with instant generation
@@ -60,7 +61,8 @@ README.md               # Complete setup and usage guide
 {
   "body": "base64_encoded_pdf_data",
   "target_lang": "hi" | "en",
-  "template_choice": "simplified"
+  "template_choice": "simplified",
+  "model_choice": "claude-opus" | "nova-2-lite"
 }
 ```
 
@@ -77,7 +79,8 @@ data: {"type": "final", "translated_document": "complete_text", "status": "compl
 {
   "body": "base64_encoded_pdf_data",
   "target_lang": "hi" | "en",
-  "template_choice": "simplified"
+  "template_choice": "simplified",
+  "model_choice": "claude-opus" | "nova-2-lite"
 }
 ```
 
@@ -111,22 +114,23 @@ data: {"type": "final", "translated_document": "complete_text", "status": "compl
 
 #### Additional Endpoints
 - `GET /` - Serves the web interface
+- `GET /models` - Returns available AI models (Claude 4.5 Opus, Amazon Nova 2 Lite)
 - `GET /health` - Service health check with configuration info
 - `GET /s3-status` - S3 connectivity and file count status
 - `POST /test-s3` - S3 upload functionality test
 
 ## AWS Integration Patterns
-- Use `boto3.client('bedrock-runtime')` for Claude 4.5 calls
+- Use `boto3.client('bedrock-runtime')` for Claude 4.5 Opus and Amazon Nova 2 Lite calls
 - Environment variables: `BUCKET_NAME`, `MODEL_ID`
 - AWS credentials configured via CLI (no hardcoded keys)
 - Handle Bedrock response parsing with proper error handling
 
-## Claude Processing Flow
-1. **PDF Upload**: Base64 encoded PDF sent to Claude 4.5 Opus
-2. **AI Processing**: OCR extraction, structure detection, and translation
-3. **Content Parsing**: Raw translated text with markdown-like formatting
-4. **Post-Processing**: Cleanup of OCR artifacts and formatting normalization
-5. **Document Generation**: Professional templates applied via ReportLab/python-docx
+## Multi-Model Processing Flow
+1. **PDF Upload**: Base64 encoded PDF sent to selected AI model (Claude 4.5 Opus or Amazon Nova 2 Lite)
+2. **AI Processing**: OCR extraction, structure detection, and translation using model-specific optimizations
+3. **Content Parsing**: Raw translated text with markdown-like formatting (Claude) or HTML-like formatting (Nova)
+4. **Post-Processing**: Model-aware cleanup of OCR artifacts, HTML tag handling, and formatting normalization
+5. **Document Generation**: Professional templates applied via ReportLab/python-docx with enhanced error handling
 
 ## Document Template Specifications
 
