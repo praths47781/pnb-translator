@@ -62,6 +62,12 @@ except Exception as e:
 BUCKET_NAME = os.environ.get('BUCKET_NAME', 'pnb-poc-docs')
 MODEL_ID = os.environ.get('MODEL_ID', 'global.anthropic.claude-opus-4-5-20251101-v1:0')
 
+# Supported models configuration
+SUPPORTED_MODELS = {
+    'claude-opus': 'global.anthropic.claude-opus-4-5-20251101-v1:0',
+    'nova-2-lite': 'global.amazon.nova-2-lite-v1:0'  # Correct model ID from AWS console
+}
+
 # logger.info(f"🔧 Configuration loaded:")
 # logger.info(f"   - Bucket: {BUCKET_NAME}")
 # logger.info(f"   - Model ID: {MODEL_ID}")
@@ -82,6 +88,7 @@ class TranslateRequest(BaseModel):
     body: str  # base64 encoded PDF
     target_lang: str  # "hi" or "en"
     template_choice: Optional[str] = "simplified"
+    model_choice: Optional[str] = "claude-opus"  # "claude-opus" or "nova-2-lite"
 
 @app.get("/")
 async def serve_frontend():
@@ -96,8 +103,31 @@ async def health_check():
         "service": "PDF Translation Service",
         "version": "1.0.0",
         "bucket": BUCKET_NAME,
-        "model": MODEL_ID,
+        "model": SUPPORTED_MODELS["claude-opus"],
         "timestamp": datetime.now().isoformat()
+    }
+
+@app.get("/models")
+async def get_available_models():
+    """Get list of available AI models"""
+    return {
+        "models": [
+            {
+                "id": "claude-opus",
+                "name": "Claude 4.5 Opus",
+                "description": "Advanced reasoning and document analysis",
+                "provider": "Anthropic",
+                "model_id": SUPPORTED_MODELS["claude-opus"]
+            },
+            {
+                "id": "nova-2-lite",
+                "name": "Amazon Nova 2 Lite",
+                "description": "Fast and efficient multimodal processing",
+                "provider": "Amazon",
+                "model_id": SUPPORTED_MODELS["nova-2-lite"]
+            }
+        ],
+        "default": "claude-opus"
     }
 
 @app.get("/s3-status")
@@ -226,6 +256,128 @@ async def test_streaming():
             "Connection": "keep-alive"
         }
     )
+
+@app.get("/list-available-models")
+async def list_available_models():
+    """List all available Bedrock models in the current region"""
+    try:
+        bedrock_client = boto3.client('bedrock', config=config)
+        response = bedrock_client.list_foundation_models()
+        
+        models = []
+        for model in response.get('modelSummaries', []):
+            models.append({
+                'modelId': model.get('modelId'),
+                'modelName': model.get('modelName'),
+                'providerName': model.get('providerName'),
+                'inputModalities': model.get('inputModalities', []),
+                'outputModalities': model.get('outputModalities', []),
+                'responseStreamingSupported': model.get('responseStreamingSupported', False)
+            })
+        
+        # Filter for Nova models specifically
+        nova_models = [m for m in models if 'nova' in m['modelId'].lower()]
+        
+        return {
+            "status": "success",
+            "region": bedrock_client.meta.region_name,
+            "total_models": len(models),
+            "nova_models": nova_models,
+            "all_models": models[:10],  # First 10 for reference
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"❌ Failed to list models: {str(e)}")
+        return {
+            "status": "error",
+            "error": str(e),
+            "timestamp": datetime.now().isoformat()
+        }
+
+@app.post("/test-model")
+async def test_model_support(request: dict):
+    """Test model connectivity and basic functionality"""
+    model_choice = request.get('model_choice', 'claude-opus')
+    
+    if model_choice not in SUPPORTED_MODELS:
+        return {
+            "status": "error",
+            "error": f"Unsupported model: {model_choice}",
+            "timestamp": datetime.now().isoformat()
+        }
+    
+    try:
+        # Simple test prompt
+        test_text = "Hello, this is a test."
+        
+        if model_choice == "nova-2-lite":
+            # Test Nova model
+            conversation = [
+                {
+                    "role": "user",
+                    "content": [{"text": f"Translate this to Hindi: {test_text}"}]
+                }
+            ]
+            
+            response = bedrock.converse(
+                modelId=SUPPORTED_MODELS[model_choice],
+                messages=conversation,
+                inferenceConfig={
+                    "maxTokens": 100,
+                    "temperature": 0.1
+                }
+            )
+            
+            result_text = response['output']['message']['content'][0]['text']
+            
+        else:  # Claude model
+            prompt = {
+                "anthropic_version": "bedrock-2023-05-31",
+                "max_tokens": 100,
+                "temperature": 0.1,
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": [{"type": "text", "text": f"Translate this to Hindi: {test_text}"}]
+                    }
+                ]
+            }
+            
+            response = bedrock.invoke_model(
+                modelId=SUPPORTED_MODELS[model_choice],
+                body=json.dumps(prompt),
+                contentType='application/json',
+                accept='application/json'
+            )
+            
+            body_content = response['body']
+            if hasattr(body_content, 'read'):
+                body_text = body_content.read().decode('utf-8')
+            else:
+                body_text = str(body_content)
+            
+            result = json.loads(body_text)
+            result_text = result['content'][0]['text']
+        
+        return {
+            "status": "success",
+            "model": model_choice,
+            "model_id": SUPPORTED_MODELS[model_choice],
+            "test_input": test_text,
+            "test_output": result_text,
+            "message": f"{model_choice} model is working correctly",
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"❌ Model test failed for {model_choice}: {str(e)}")
+        return {
+            "status": "error",
+            "model": model_choice,
+            "error": str(e),
+            "timestamp": datetime.now().isoformat()
+        }
 
 @app.get("/test-fonts")
 async def test_font_support():
@@ -424,10 +576,20 @@ async def translate_pdf_stream(request: TranslateRequest, background_tasks: Back
                 content_type="application/pdf"
             )
             
-            # Stream translation from Bedrock
-            # print(f"🟡 [BACKEND] CALLING BEDROCK STREAMING - ID: {request_id}")
+            # Stream translation from selected model
+            model_choice = request.model_choice or "claude-opus"
+            if model_choice not in SUPPORTED_MODELS:
+                yield f"data: {json.dumps({'type': 'error', 'error': f'Unsupported model: {model_choice}', 'status': 'error'})}\n\n"
+                return
+            
+            # Choose streaming function based on model
+            if model_choice == "nova-2-lite":
+                stream_function = nova_stream_translation
+            else:  # claude-opus (default)
+                stream_function = bedrock_stream_translation
+            
             full_translation = ""
-            async for chunk_data in bedrock_stream_translation(pdf_bytes, request.target_lang, request_id):
+            async for chunk_data in stream_function(pdf_bytes, request.target_lang, request_id):
                 if chunk_data['type'] == 'chunk':
                     full_translation += chunk_data['chunk']
                 
@@ -515,9 +677,13 @@ async def translate_pdf(request: TranslateRequest, background_tasks: BackgroundT
             content_type="application/pdf"
         )
         
-        # Extract and translate content using Claude 4.5 (main processing - no S3 blocking)
+        # Extract and translate content using selected model (main processing - no S3 blocking)
+        model_choice = request.model_choice or "claude-opus"
+        if model_choice not in SUPPORTED_MODELS:
+            raise HTTPException(status_code=400, detail=f"Unsupported model: {model_choice}")
+        
         extraction_start = time.time()
-        translated_document = await extract_and_translate_pdf(pdf_bytes, request.target_lang, request_id)
+        translated_document = await extract_and_translate_pdf(pdf_bytes, request.target_lang, request_id, model_choice)
         extraction_time = time.time() - extraction_start
         
         total_time = time.time() - start_time
@@ -546,6 +712,143 @@ async def translate_pdf(request: TranslateRequest, background_tasks: BackgroundT
         logger.exception(f"📋 [{request_id}] Full traceback:")
         raise HTTPException(status_code=500, detail=f"Processing error: {str(e)}")
 
+async def nova_stream_translation(pdf_bytes: bytes, target_lang: str, request_id: str):
+    """Stream translation from Amazon Nova with real-time updates using correct Nova API format"""
+    
+    target_language = "Hindi" if target_lang == "hi" else "English"
+    source_language = "English" if target_lang == "hi" else "Hindi"
+    
+    # Nova-specific prompt following Amazon Nova multimodal guidelines
+    prompt_text = f"""## Instructions
+Extract all information from this document and translate it completely from {source_language} to {target_language} using only Markdown formatting. Retain the original layout and structure including lists, tables, charts and all content.
+
+## Rules
+1. TRANSLATE EVERY WORD - Read the complete document and translate every single sentence, paragraph, table, list, header, footer, and section
+2. COMPLETE TRANSLATION - Do not summarize or skip any content. Translate the entire document from beginning to end
+3. STRUCTURE PRESERVATION - Maintain exact document structure and formatting hierarchy
+4. Use # for main headings, ## for subheadings, ### for sub-subheadings
+5. Preserve bullet points (•) and numbered lists exactly
+6. Maintain table structures with proper formatting
+7. Keep numbers, dates, proper names, and technical terms unchanged
+8. NEVER use HTML image tags `<img>` in the output
+9. NEVER use Markdown image tags `![]()` in the output
+10. Always wrap the entire output in ``` tags
+
+CRITICAL: This must be a COMPLETE word-for-word translation of the entire document. Do not provide summaries or excerpts."""
+
+    # Nova request body format (based on official documentation)
+    # For invoke_model API, bytes need to be base64 encoded
+    import base64
+    pdf_base64 = base64.b64encode(pdf_bytes).decode('utf-8')
+    
+    # Following Nova multimodal guidelines: document first, then text prompt
+    request_body = {
+        "messages": [
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "document": {
+                            "format": "pdf",
+                            "name": "document.pdf",  # Simple, compliant name
+                            "source": {"bytes": pdf_base64}  # Base64 encoded for JSON serialization
+                        }
+                    },
+                    {"text": prompt_text}  # Text prompt must be last per guidelines
+                ]
+            }
+        ],
+        "inferenceConfig": {
+            "maxTokens": 40000,  # Increased for complete translations
+            "temperature": 0.7,  # Default temperature per guidelines
+            "topP": 0.9  # Default topP per guidelines
+        }
+        # Reasoning disabled per OCR guidelines for better performance
+    }
+    
+    logger.info(f"🔧 [{request_id}] NOVA STREAMING - Using correct Nova API format")
+    logger.info(f"🔧 [{request_id}] NOVA STREAMING - Model ID: {SUPPORTED_MODELS['nova-2-lite']}")
+    logger.info(f"🔧 [{request_id}] NOVA STREAMING - Document name: document.pdf")
+    
+    # Use streaming API with retry logic
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            # Use Nova's invoke_model_with_response_stream API (correct method for documents)
+            logger.info(f"🔧 [{request_id}] NOVA STREAMING - Calling invoke_model_with_response_stream (attempt {attempt + 1})")
+            
+            response = bedrock.invoke_model_with_response_stream(
+                modelId=SUPPORTED_MODELS["nova-2-lite"],
+                body=json.dumps(request_body)
+            )
+            
+            logger.info(f"🔧 [{request_id}] NOVA STREAMING - API call successful, processing stream")
+            
+            # Process streaming response (based on official documentation)
+            full_translation = ""
+            chunk_count = 0
+            last_chunks = []  # Track recent chunks to detect repetition
+            
+            for event in response["body"]:
+                chunk = json.loads(event["chunk"]["bytes"])
+                
+                if "contentBlockDelta" in chunk:
+                    delta = chunk["contentBlockDelta"]["delta"]
+                    if "text" in delta:
+                        chunk_text = delta["text"]
+                        
+                        # Check for repetition (only if exact same chunk repeats 5+ times)
+                        if len(last_chunks) >= 5 and chunk_text.strip() and all(chunk_text.strip() == prev_chunk.strip() for prev_chunk in last_chunks[-5:]):
+                            logger.warning(f"🔄 [{request_id}] NOVA STREAMING - Detected exact repetition, stopping stream")
+                            break
+                        
+                        # Track recent chunks
+                        last_chunks.append(chunk_text)
+                        if len(last_chunks) > 5:  # Keep only last 5 chunks
+                            last_chunks.pop(0)
+                        
+                        full_translation += chunk_text
+                        chunk_count += 1
+                        
+                        # Yield chunk to frontend
+                        yield {
+                            'type': 'chunk',
+                            'chunk': chunk_text,
+                            'progress': len(full_translation),
+                            'chunk_count': chunk_count,
+                            'status': 'translating'
+                        }
+                
+                elif "messageStop" in chunk:
+                    # Translation complete
+                    break
+            
+            # SUCCESS: Break out of retry loop after successful streaming completion
+            logger.info(f"🔧 [{request_id}] NOVA STREAMING - Streaming completed successfully")
+            break
+            
+        except Exception as e:
+            error_msg = str(e)
+            logger.error(f"❌ [{request_id}] NOVA STREAMING - Attempt {attempt + 1} failed: {error_msg}")
+            
+            if attempt == max_retries - 1:  # Last attempt
+                yield {
+                    'type': 'error',
+                    'error': f"Nova streaming failed: {error_msg}",
+                    'status': 'error'
+                }
+                raise HTTPException(status_code=500, detail=f"Nova streaming error: {error_msg}")
+            else:
+                # Wait before retry
+                await asyncio.sleep(2 ** attempt)
+                yield {
+                    'type': 'retry',
+                    'attempt': attempt + 1,
+                    'max_retries': max_retries,
+                    'status': 'retrying'
+                }
+                continue
+
 async def bedrock_stream_translation(pdf_bytes: bytes, target_lang: str, request_id: str):
     """Stream translation from Bedrock with real-time updates"""
     
@@ -553,17 +856,25 @@ async def bedrock_stream_translation(pdf_bytes: bytes, target_lang: str, request
     target_language = "Hindi" if target_lang == "hi" else "English"
     source_language = "English" if target_lang == "hi" else "Hindi"
     
-    # Optimized concise prompt (same as before)
-    prompt_text = f"""Translate this PDF document completely from {source_language} to {target_language}.
+    # Claude prompt following multimodal guidelines - text should be last
+    prompt_text = f"""## Instructions
+Extract all information from this document and translate it completely from {source_language} to {target_language} using only Markdown formatting. Retain the original layout and structure including lists, tables, charts and all content.
 
-REQUIREMENTS:
-1. Translate EVERY word from start to finish - do not stop early
-2. Preserve exact structure: headings, lists, tables, formatting
-3. Keep all numbers, dates, names, and legal terms unchanged
-4. Use markdown: # for titles, ## for sections, **bold** for emphasis
-5. Include ALL sections A-N and beyond, annexures, signatures, contact info
+## Rules
+1. TRANSLATE EVERY WORD - Read the complete document and translate every single sentence, paragraph, table, list, header, footer, and section
+2. COMPLETE TRANSLATION - Do not summarize or skip any content. Translate the entire document from beginning to end
+3. STRUCTURE PRESERVATION - Maintain exact document structure and formatting hierarchy
+4. Use # for main headings, ## for subheadings, ### for sub-subheadings
+5. Preserve bullet points (•) and numbered lists exactly
+6. Maintain table structures with proper formatting
+7. Keep numbers, dates, proper names, and technical terms unchanged
+8. For math formulae, always use LaTeX syntax
+9. Describe images using only text
+10. NEVER use HTML image tags `<img>` in the output
+11. NEVER use Markdown image tags `![]()` in the output
+12. Always wrap the entire output in ``` tags
 
-OUTPUT: Start translation immediately. Translate the complete document including all fine print and appendices."""
+CRITICAL: This must be a COMPLETE word-for-word translation of the entire document. Do not provide summaries or excerpts."""
 
     content_items = [
         {
@@ -600,7 +911,7 @@ OUTPUT: Start translation immediately. Translate the complete document including
             # Use streaming invoke
             # print(f"🟡 [BEDROCK] INVOKING MODEL - ID: {request_id}, Attempt: {attempt + 1}")
             response = bedrock.invoke_model_with_response_stream(
-                modelId=MODEL_ID,
+                modelId=SUPPORTED_MODELS["claude-opus"],
                 body=json.dumps(prompt),
                 contentType='application/json',
                 accept='application/json'
@@ -658,23 +969,31 @@ OUTPUT: Start translation immediately. Translate the complete document including
                 }
                 continue
 
-async def extract_and_translate_pdf(pdf_bytes: bytes, target_lang: str, request_id: str) -> str:
+async def extract_and_translate_pdf(pdf_bytes: bytes, target_lang: str, request_id: str, model_choice: str = "claude-opus") -> str:
     """Extract content from PDF and translate using Claude 4.5"""
     
     target_language = "Hindi" if target_lang == "hi" else "English"
     source_language = "English" if target_lang == "hi" else "Hindi"
     
-    # Optimized concise prompt (much faster processing)
-    prompt_text = f"""Translate this PDF document completely from {source_language} to {target_language}.
+    # Improved prompt following multimodal guidelines for complete translation
+    prompt_text = f"""## Instructions
+Extract all information from this document and translate it completely from {source_language} to {target_language} using only Markdown formatting. Retain the original layout and structure including lists, tables, charts and all content.
 
-REQUIREMENTS:
-1. Translate EVERY word from start to finish - do not stop early
-2. Preserve exact structure: headings, lists, tables, formatting
-3. Keep all numbers, dates, names, and legal terms unchanged
-4. Use markdown: # for titles, ## for sections, **bold** for emphasis
-5. Include ALL sections A-N and beyond, annexures, signatures, contact info
+## Rules
+1. TRANSLATE EVERY WORD - Read the complete document and translate every single sentence, paragraph, table, list, header, footer, and section
+2. COMPLETE TRANSLATION - Do not summarize or skip any content. Translate the entire document from beginning to end
+3. STRUCTURE PRESERVATION - Maintain exact document structure and formatting hierarchy
+4. Use # for main headings, ## for subheadings, ### for sub-subheadings
+5. Preserve bullet points (•) and numbered lists exactly
+6. Maintain table structures with proper formatting
+7. Keep numbers, dates, proper names, and technical terms unchanged
+8. For math formulae, always use LaTeX syntax
+9. Describe images using only text
+10. NEVER use HTML image tags `<img>` in the output
+11. NEVER use Markdown image tags `![]()` in the output
+12. Always wrap the entire output in ``` tags
 
-OUTPUT: Start translation immediately. Translate the complete document including all fine print and appendices."""
+CRITICAL: This must be a COMPLETE word-for-word translation of the entire document. Do not provide summaries or excerpts. Translate every single page, section, table, list, and paragraph."""
 
     content_items = [
         {
@@ -691,68 +1010,156 @@ OUTPUT: Start translation immediately. Translate the complete document including
         }
     ]
     
-    # Optimized Bedrock payload for faster processing
-    prompt = {
-        "anthropic_version": "bedrock-2023-05-31",
-        "max_tokens": 64000,  # Higher limit for complete translations
-        "temperature": 0,  # Lower temperature for faster, more deterministic responses
-        "messages": [
-            {
-                "role": "user",
-                "content": content_items
-            }
-        ]
-    }
-    
-    # Async retry logic for Bedrock API
-    max_retries = 3
-    for attempt in range(max_retries):
-        try:
-            bedrock_start = time.time()
-            # Use asyncio to run Bedrock call in thread pool (non-blocking)
-            loop = asyncio.get_event_loop()
-            response = await loop.run_in_executor(
-                None,
-                lambda: bedrock.invoke_model(
-                    modelId=MODEL_ID,
-                    body=json.dumps(prompt),
-                    contentType='application/json',
-                    accept='application/json'
-                )
-            )
-            bedrock_time = time.time() - bedrock_start
-            break  # Success, exit retry loop
-            
-        except Exception as e:
-            error_msg = str(e)
-            logger.error(f"❌ [{request_id}] Bedrock API attempt {attempt + 1} failed: {error_msg}")
-            
-            if attempt == max_retries - 1:  # Last attempt
-                if "timeout" in error_msg.lower():
-                    logger.error(f"💥 [{request_id}] All attempts failed due to timeout.")
-                    raise HTTPException(
-                        status_code=504, 
-                        detail="Request timed out. The document may be too large or complex."
-                    )
-                else:
-                    logger.error(f"💥 [{request_id}] All Bedrock API attempts failed")
-                    raise HTTPException(status_code=500, detail=f"Bedrock API error: {error_msg}")
-            else:
-                # Async wait before retry (non-blocking)
-                wait_time = 2 ** attempt
-                await asyncio.sleep(wait_time)
-                continue
-    
-    # Parse response
-    try:
-        body_content = response['body']
-        if hasattr(body_content, 'read'):
-            body_text = body_content.read().decode('utf-8')
-        else:
-            body_text = str(body_content)
+    # Choose API format based on model
+    if model_choice == "nova-2-lite":
+        # Nova request body format (correct API format)
+        # For invoke_model API, bytes need to be base64 encoded
+        import base64
+        pdf_base64 = base64.b64encode(pdf_bytes).decode('utf-8')
         
-        result = json.loads(body_text)
-        translated_document = result['content'][0]['text']
+        # Following Nova multimodal guidelines: document first, then text prompt
+        request_body = {
+            "messages": [
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "document": {
+                                "format": "pdf",
+                                "name": "document.pdf",
+                                "source": {"bytes": pdf_base64}  # Base64 encoded for JSON serialization
+                            }
+                        },
+                        {"text": prompt_text}  # Text prompt must be last per guidelines
+                    ]
+                }
+            ],
+            "inferenceConfig": {
+                "maxTokens": 40000,  # Increased for complete translations
+                "temperature": 0.7,  # Default temperature per guidelines
+                "topP": 0.9  # Default topP per guidelines
+            }
+            # Reasoning disabled per OCR guidelines for better performance
+        }
+        
+        logger.info(f"🔧 [{request_id}] NOVA NON-STREAMING - Using correct Nova API format")
+        logger.info(f"🔧 [{request_id}] NOVA NON-STREAMING - Model ID: {SUPPORTED_MODELS[model_choice]}")
+        
+        # Async retry logic for Nova API
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                bedrock_start = time.time()
+                # Use asyncio to run Nova call in thread pool (non-blocking)
+                logger.info(f"🔧 [{request_id}] NOVA NON-STREAMING - Calling invoke_model (attempt {attempt + 1})")
+                
+                loop = asyncio.get_event_loop()
+                response = await loop.run_in_executor(
+                    None,
+                    lambda: bedrock.invoke_model(
+                        modelId=SUPPORTED_MODELS[model_choice],
+                        body=json.dumps(request_body)
+                    )
+                )
+                logger.info(f"🔧 [{request_id}] NOVA NON-STREAMING - API call successful")
+                bedrock_time = time.time() - bedrock_start
+                break  # Success, exit retry loop
+                
+            except Exception as e:
+                error_msg = str(e)
+                logger.error(f"❌ [{request_id}] Nova API attempt {attempt + 1} failed: {error_msg}")
+                
+                if attempt == max_retries - 1:  # Last attempt
+                    if "timeout" in error_msg.lower():
+                        logger.error(f"💥 [{request_id}] All attempts failed due to timeout.")
+                        raise HTTPException(
+                            status_code=504, 
+                            detail="Request timed out. The document may be too large or complex."
+                        )
+                    else:
+                        logger.error(f"💥 [{request_id}] All Nova API attempts failed")
+                        raise HTTPException(status_code=500, detail=f"Nova API error: {error_msg}")
+                else:
+                    # Async wait before retry (non-blocking)
+                    wait_time = 2 ** attempt
+                    await asyncio.sleep(wait_time)
+                    continue
+    
+    else:  # Claude model (default)
+        # Optimized Bedrock payload for faster processing
+        prompt = {
+            "anthropic_version": "bedrock-2023-05-31",
+            "max_tokens": 64000,  # Higher limit for complete translations
+            "temperature": 0,  # Lower temperature for faster, more deterministic responses
+            "messages": [
+                {
+                    "role": "user",
+                    "content": content_items
+                }
+            ]
+        }
+        
+        # Async retry logic for Bedrock API
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                bedrock_start = time.time()
+                # Use asyncio to run Bedrock call in thread pool (non-blocking)
+                loop = asyncio.get_event_loop()
+                response = await loop.run_in_executor(
+                    None,
+                    lambda: bedrock.invoke_model(
+                        modelId=SUPPORTED_MODELS[model_choice],
+                        body=json.dumps(prompt),
+                        contentType='application/json',
+                        accept='application/json'
+                    )
+                )
+                bedrock_time = time.time() - bedrock_start
+                break  # Success, exit retry loop
+                
+            except Exception as e:
+                error_msg = str(e)
+                logger.error(f"❌ [{request_id}] Bedrock API attempt {attempt + 1} failed: {error_msg}")
+                
+                if attempt == max_retries - 1:  # Last attempt
+                    if "timeout" in error_msg.lower():
+                        logger.error(f"💥 [{request_id}] All attempts failed due to timeout.")
+                        raise HTTPException(
+                            status_code=504, 
+                            detail="Request timed out. The document may be too large or complex."
+                        )
+                    else:
+                        logger.error(f"💥 [{request_id}] All Bedrock API attempts failed")
+                        raise HTTPException(status_code=500, detail=f"Bedrock API error: {error_msg}")
+                else:
+                    # Async wait before retry (non-blocking)
+                    wait_time = 2 ** attempt
+                    await asyncio.sleep(wait_time)
+                    continue
+    
+    # Parse response based on model type
+    try:
+        if model_choice == "nova-2-lite":
+            # Nova response format (invoke_model returns different structure)
+            body_content = response['body']
+            if hasattr(body_content, 'read'):
+                body_text = body_content.read().decode('utf-8')
+            else:
+                body_text = str(body_content)
+            
+            result = json.loads(body_text)
+            translated_document = result['output']['message']['content'][0]['text']
+        else:
+            # Claude response format
+            body_content = response['body']
+            if hasattr(body_content, 'read'):
+                body_text = body_content.read().decode('utf-8')
+            else:
+                body_text = str(body_content)
+            
+            result = json.loads(body_text)
+            translated_document = result['content'][0]['text']
         
         response_length = len(translated_document)
         
@@ -778,61 +1185,127 @@ OUTPUT: Start translation immediately. Translate the complete document including
         
         # Check if we need to retry for completeness
         if response_length < 1000 or not has_proper_ending:
-            # Concise retry prompt
-            retry_prompt_text = f"""COMPLETE TRANSLATION REQUIRED: Translate this ENTIRE document from {source_language} to {target_language}.
+            # Retry prompt with emphasis on completeness
+            retry_prompt_text = f"""## Instructions - RETRY FOR COMPLETENESS
+The previous translation was incomplete. Extract ALL information from this document and translate it COMPLETELY from {source_language} to {target_language} using only Markdown formatting. 
 
-Previous attempt was incomplete. Translate ALL sections A-N+, tables, annexures, signatures, and contact info. Do not stop early.
+## Critical Requirements
+1. TRANSLATE EVERY SINGLE WORD - Do not skip any content, sections, tables, lists, headers, footers, or appendices
+2. COMPLETE DOCUMENT TRANSLATION - Translate from the very first word to the very last word
+3. INCLUDE ALL PAGES - Translate every page, every section, every paragraph, every table row
+4. PRESERVE ALL STRUCTURE - Maintain exact formatting, lists, tables, and hierarchy
+5. NO SUMMARIES - This must be a complete word-for-word translation, not a summary
+6. Use # for main headings, ## for subheadings, ### for sub-subheadings
+7. Preserve bullet points (•) and numbered lists exactly
+8. Maintain table structures with proper formatting
+9. Keep numbers, dates, proper names, and technical terms unchanged
+10. Always wrap the entire output in ``` tags
 
-Translate the COMPLETE document now:"""
+CRITICAL: Translate the ENTIRE document completely. Every word, every sentence, every section must be translated."""
 
-            retry_content_items = [
-                {
-                    "type": "text",
-                    "text": retry_prompt_text
-                },
-                {
-                    "type": "document",
-                    "source": {
-                        "type": "base64",
-                        "media_type": "application/pdf",
-                        "data": base64.b64encode(pdf_bytes).decode('utf-8')
-                    }
-                }
-            ]
-            
-            retry_prompt = {
-                "anthropic_version": "bedrock-2023-05-31",
-                "max_tokens": 64000,  # Match main prompt token limit
-                "temperature": 0.03,  # Even lower for retry consistency
-                "messages": [
-                    {
-                        "role": "user",
-                        "content": retry_content_items
-                    }
-                ]
-            }
-            
             try:
-                # Use async executor for retry call as well
-                loop = asyncio.get_event_loop()
-                retry_response = await loop.run_in_executor(
-                    None,
-                    lambda: bedrock.invoke_model(
-                        modelId=MODEL_ID,
-                        body=json.dumps(retry_prompt),
-                        contentType='application/json',
-                        accept='application/json'
+                if model_choice == "nova-2-lite":
+                    # Nova retry format (correct API format)
+                    # For invoke_model API, bytes need to be base64 encoded
+                    import base64
+                    pdf_base64 = base64.b64encode(pdf_bytes).decode('utf-8')
+                    
+                    # Following Nova multimodal guidelines: document first, then text prompt
+                    retry_request_body = {
+                        "messages": [
+                            {
+                                "role": "user",
+                                "content": [
+                                    {
+                                        "document": {
+                                            "format": "pdf",
+                                            "name": "document.pdf",
+                                            "source": {"bytes": pdf_base64}  # Base64 encoded for JSON serialization
+                                        }
+                                    },
+                                    {"text": retry_prompt_text}  # Text prompt must be last per guidelines
+                                ]
+                            }
+                        ],
+                        "inferenceConfig": {
+                            "maxTokens": 40000,  # Increased for complete translations
+                            "temperature": 0.7,  # Default temperature per guidelines
+                            "topP": 0.9  # Default topP per guidelines
+                        }
+                        # Reasoning disabled per OCR guidelines for better performance
+                    }
+                    
+                    logger.info(f"🔧 [{request_id}] NOVA RETRY - Using correct Nova API format for retry")
+                    
+                    # Use async executor for retry call
+                    loop = asyncio.get_event_loop()
+                    retry_response = await loop.run_in_executor(
+                        None,
+                        lambda: bedrock.invoke_model(
+                            modelId=SUPPORTED_MODELS[model_choice],
+                            body=json.dumps(retry_request_body)
+                        )
                     )
-                )
-                
-                retry_body_content = retry_response['body']
-                if hasattr(retry_body_content, 'read'):
-                    retry_body_text = retry_body_content.read().decode('utf-8')
+                    
+                    # Parse Nova retry response
+                    retry_body_content = retry_response['body']
+                    if hasattr(retry_body_content, 'read'):
+                        retry_body_text = retry_body_content.read().decode('utf-8')
+                    else:
+                        retry_body_text = str(retry_body_content)
+                    
+                    retry_result = json.loads(retry_body_text)
+                    retry_translated_document = retry_result['output']['message']['content'][0]['text']
+                    
                 else:
-                    retry_body_text = str(retry_body_content)
-                
-                retry_result = json.loads(retry_body_text)
-                retry_translated_document = retry_result['content'][0]['text']
+                    # Claude retry format
+                    retry_content_items = [
+                        {
+                            "type": "text",
+                            "text": retry_prompt_text
+                        },
+                        {
+                            "type": "document",
+                            "source": {
+                                "type": "base64",
+                                "media_type": "application/pdf",
+                                "data": base64.b64encode(pdf_bytes).decode('utf-8')
+                            }
+                        }
+                    ]
+                    
+                    retry_prompt = {
+                        "anthropic_version": "bedrock-2023-05-31",
+                        "max_tokens": 64000,  # Match main prompt token limit
+                        "temperature": 0.03,  # Even lower for retry consistency
+                        "messages": [
+                            {
+                                "role": "user",
+                                "content": retry_content_items
+                            }
+                        ]
+                    }
+                    
+                    # Use async executor for retry call as well
+                    loop = asyncio.get_event_loop()
+                    retry_response = await loop.run_in_executor(
+                        None,
+                        lambda: bedrock.invoke_model(
+                            modelId=SUPPORTED_MODELS[model_choice],
+                            body=json.dumps(retry_prompt),
+                            contentType='application/json',
+                            accept='application/json'
+                        )
+                    )
+                    
+                    retry_body_content = retry_response['body']
+                    if hasattr(retry_body_content, 'read'):
+                        retry_body_text = retry_body_content.read().decode('utf-8')
+                    else:
+                        retry_body_text = str(retry_body_content)
+                    
+                    retry_result = json.loads(retry_body_text)
+                    retry_translated_document = retry_result['content'][0]['text']
                 
                 # Use retry result if it's longer and more complete
                 if len(retry_translated_document) > len(translated_document):
@@ -854,6 +1327,19 @@ Translate the COMPLETE document now:"""
 def post_process_translation(text: str, request_id: str) -> str:
     """Clean up and format the translated document - optimized single-pass processing"""
     
+    # First, strip outer code fences if present (Nova might wrap output in ``` tags)
+    def strip_outer_code_fences(text):
+        lines = text.split("\n")
+        # Remove only the outer code fences if present
+        if lines and lines[0].startswith("```"):
+            lines = lines[1:]
+            if lines and lines[-1].startswith("```"):
+                lines = lines[:-1]
+        return "\n".join(lines).strip()
+    
+    # Strip code fences first
+    cleaned = strip_outer_code_fences(text)
+    
     # Combined regex patterns for single-pass processing (much faster)
     # Remove black boxes, excessive whitespace, and clean up formatting in one go
     patterns = [
@@ -867,7 +1353,6 @@ def post_process_translation(text: str, request_id: str) -> str:
     ]
     
     # Apply all patterns in sequence (still faster than multiple separate calls)
-    cleaned = text
     for pattern, replacement in patterns:
         cleaned = re.sub(pattern, replacement, cleaned, flags=re.MULTILINE)
     
@@ -966,6 +1451,49 @@ def upload_to_s3_sync(file_content: bytes, file_name: str, folder: str, request_
     except Exception as e:
         logger.error(f"❌ [{request_id}] S3 upload failed with error: {str(e)}")
         raise Exception(f"S3 upload failed: {str(e)}")
+
+def sanitize_document_name_for_nova(name: str = "document") -> str:
+    """
+    Sanitize document name for Nova API requirements:
+    - Only alphanumeric characters, whitespace, hyphens, parentheses, and square brackets
+    - No more than one consecutive whitespace character
+    - Max length should be reasonable
+    """
+    import re
+    
+    # Start with a safe default if name is empty
+    if not name or not name.strip():
+        name = "document"
+    
+    # Remove file extensions
+    name = re.sub(r'\.[^.]*$', '', name)
+    
+    # Replace problematic characters with safe alternatives
+    # Convert underscores and dots to hyphens (which are allowed)
+    name = name.replace('_', '-').replace('.', '-')
+    
+    # Keep only allowed characters: alphanumeric, whitespace, hyphens, parentheses, square brackets
+    name = re.sub(r'[^a-zA-Z0-9\s\-\(\)\[\]]', '', name)
+    
+    # Replace multiple consecutive whitespace with single space
+    name = re.sub(r'\s+', ' ', name)
+    
+    # Replace multiple consecutive hyphens with single hyphen
+    name = re.sub(r'-+', '-', name)
+    
+    # Trim whitespace and hyphens
+    name = name.strip().strip('-')
+    
+    # Ensure it's not empty after cleaning
+    if not name:
+        name = "document"
+    
+    # Limit length to be safe (Nova doesn't specify max length, but let's be conservative)
+    if len(name) > 50:
+        name = name[:50].strip().strip('-')
+    
+    # Add .pdf extension for clarity
+    return f"{name}.pdf"
 
 def generate_file_name(original_name: str, request_id: str, suffix: str = "") -> str:
     """Generate a unique file name for S3 storage"""

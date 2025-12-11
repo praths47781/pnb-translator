@@ -317,6 +317,29 @@ def wrap_hindi_text_with_font(text, font_name):
     
     return wrapped_text
 
+def clean_html_tags_for_reportlab(text):
+    """Clean HTML tags that cause ReportLab parsing issues"""
+    if not text:
+        return ""
+    
+    import re
+    
+    # Fix malformed <br> tags - convert to proper line breaks
+    # Handle cases like: <br>content</br> or <br>content
+    text = re.sub(r'<br[^>]*>([^<]*?)(?:</br>|(?=<)|$)', r'\n\1', text, flags=re.IGNORECASE)
+    
+    # Convert remaining <br> tags to line breaks
+    text = re.sub(r'<br\s*/?>', '\n', text, flags=re.IGNORECASE)
+    
+    # Remove any remaining malformed HTML tags that aren't font tags
+    # Keep font tags but remove others that might cause parsing issues
+    text = re.sub(r'<(?!/?font\b)[^>]*>', '', text, flags=re.IGNORECASE)
+    
+    # Clean up excessive line breaks
+    text = re.sub(r'\n\s*\n\s*\n+', '\n\n', text)
+    
+    return text.strip()
+
 def safe_text_for_pdf(text, font_name='Helvetica'):
     """Ensure text is properly encoded for PDF generation"""
     if not text:
@@ -327,7 +350,10 @@ def safe_text_for_pdf(text, font_name='Helvetica'):
         if isinstance(text, bytes):
             text = text.decode('utf-8')
         
-        # Clean problematic characters first
+        # Clean HTML tags that cause ReportLab issues (Nova output compatibility)
+        text = clean_html_tags_for_reportlab(text)
+        
+        # Clean problematic characters
         text = clean_text_for_pdf(text)
         
         # For Hindi text, ensure proper Unicode normalization
@@ -494,13 +520,29 @@ def generate_pdf_from_translation(translated_text, source_lang="English", target
         # Handle headers
         if line.startswith('# '):
             safe_title = safe_text_for_pdf(line[2:], selected_font)
-            story.append(Paragraph(safe_title, title_style))
+            try:
+                story.append(Paragraph(safe_title, title_style))
+            except Exception:
+                # Fallback for headers
+                import re
+                plain_title = re.sub(r'<[^>]+>', '', safe_title)
+                story.append(Paragraph(plain_title, title_style))
         elif line.startswith('## '):
             safe_heading = safe_text_for_pdf(line[3:], selected_font)
-            story.append(Paragraph(safe_heading, heading_style))
+            try:
+                story.append(Paragraph(safe_heading, heading_style))
+            except Exception:
+                import re
+                plain_heading = re.sub(r'<[^>]+>', '', safe_heading)
+                story.append(Paragraph(plain_heading, heading_style))
         elif line.startswith('### '):
             safe_subheading = safe_text_for_pdf(line[4:], selected_font)
-            story.append(Paragraph(safe_subheading, subheading_style))
+            try:
+                story.append(Paragraph(safe_subheading, subheading_style))
+            except Exception:
+                import re
+                plain_subheading = re.sub(r'<[^>]+>', '', safe_subheading)
+                story.append(Paragraph(plain_subheading, subheading_style))
         # Handle lists
         elif line.strip().startswith(('•', '-', '*')):
             bullet_style = ParagraphStyle(
@@ -512,7 +554,12 @@ def generate_pdf_from_translation(translated_text, source_lang="English", target
                 fontName=selected_font
             )
             safe_bullet = safe_text_for_pdf(f"• {line.strip()[1:].strip()}", selected_font)
-            story.append(Paragraph(safe_bullet, bullet_style))
+            try:
+                story.append(Paragraph(safe_bullet, bullet_style))
+            except Exception:
+                import re
+                plain_bullet = re.sub(r'<[^>]+>', '', safe_bullet)
+                story.append(Paragraph(plain_bullet, bullet_style))
         elif line.strip().startswith(tuple(f'{i}.' for i in range(1, 10))):
             number_style = ParagraphStyle(
                 'NumberedList',
@@ -521,24 +568,49 @@ def generate_pdf_from_translation(translated_text, source_lang="English", target
                 fontName=selected_font
             )
             safe_number = safe_text_for_pdf(line.strip(), selected_font)
-            story.append(Paragraph(safe_number, number_style))
+            try:
+                story.append(Paragraph(safe_number, number_style))
+            except Exception:
+                import re
+                plain_number = re.sub(r'<[^>]+>', '', safe_number)
+                story.append(Paragraph(plain_number, number_style))
         # Handle tables
         elif '|' in line and len(line.split('|')) > 2:
             table_style = ParagraphStyle(
                 'TableText',
                 parent=styles['Normal'],
                 fontSize=9,
-                fontName='Courier',
+                fontName=selected_font,  # Use selected font instead of Courier
                 spaceAfter=6
             )
-            story.append(Paragraph(line, table_style))
+            # Clean the table line for ReportLab compatibility
+            safe_table_line = safe_text_for_pdf(line, selected_font)
+            try:
+                story.append(Paragraph(safe_table_line, table_style))
+            except Exception:
+                # Fallback for table content
+                import re
+                plain_table_line = re.sub(r'<[^>]+>', '', safe_table_line)
+                story.append(Paragraph(plain_table_line, table_style))
         # Regular paragraphs
         else:
             # Handle bold text and ensure proper encoding
             formatted_line = line.replace('**', '<b>', 1).replace('**', '</b>', 1)
             safe_line = safe_text_for_pdf(formatted_line, selected_font)
             
-            story.append(Paragraph(safe_line, body_style))
+            try:
+                story.append(Paragraph(safe_line, body_style))
+            except Exception as para_error:
+                # Fallback: if paragraph creation fails, try with plain text
+                try:
+                    # Strip all HTML tags as last resort
+                    import re
+                    plain_text = re.sub(r'<[^>]+>', '', safe_line)
+                    story.append(Paragraph(plain_text, body_style))
+                except Exception:
+                    # Ultimate fallback: add as plain text without paragraph formatting
+                    story.append(Spacer(1, 6))
+                    continue
     
     # FOOTER HANDLER
     def add_professional_footer(canvas, doc):

@@ -648,6 +648,14 @@
                 </select>
             </div>
 
+            <div class="form-group">
+                <label for="modelChoice" class="form-label">AI Model</label>
+                <select id="modelChoice" class="form-select">
+                    <option value="claude-opus">Claude 4.5 Opus (Advanced reasoning)</option>
+                    <option value="nova-2-lite">Amazon Nova 2 Lite (Fast processing)</option>
+                </select>
+            </div>
+
             <button class="btn btn-primary btn-full" id="processBtn" disabled>
                 <i class="fas fa-language"></i>
                 Start Translation
@@ -783,39 +791,88 @@
     <script>
         class EnterpriseTranslator {
             constructor() {
-                // console.log('EnterpriseTranslator constructor called');
+                // Initialize state
                 this.selectedFile = null;
                 this.translatedDocument = null;
                 this.originalText = null;
                 this.isEditMode = false;
-                this.isProcessing = false; // Prevent duplicate processing
+                this.isProcessing = false;
+                
+                // Cache DOM elements for performance (avoid repeated getElementById calls)
+                this.cacheElements();
                 this.initializeEventListeners();
             }
 
+            cacheElements() {
+                // Upload elements
+                this.elements = {
+                    uploadArea: document.getElementById('uploadArea'),
+                    fileInput: document.getElementById('fileInput'),
+                    processBtn: document.getElementById('processBtn'),
+                    
+                    // File info elements
+                    fileInfo: document.getElementById('fileInfo'),
+                    fileName: document.getElementById('fileName'),
+                    fileSize: document.getElementById('fileSize'),
+                    fileType: document.getElementById('fileType'),
+                    
+                    // Language selection
+                    targetLang: document.getElementById('targetLang'),
+                    modelChoice: document.getElementById('modelChoice'),
+                    
+                    // State containers
+                    welcomeState: document.getElementById('welcomeState'),
+                    processingState: document.getElementById('processingState'),
+                    resultState: document.getElementById('resultState'),
+                    
+                    // Processing steps
+                    step1Icon: document.getElementById('step1Icon'),
+                    step1Text: document.getElementById('step1Text'),
+                    step2Icon: document.getElementById('step2Icon'),
+                    step2Text: document.getElementById('step2Text'),
+                    step3Icon: document.getElementById('step3Icon'),
+                    step3Text: document.getElementById('step3Text'),
+                    
+                    // Result elements
+                    documentContent: document.getElementById('documentContent'),
+                    resultStats: document.getElementById('resultStats'),
+                    
+                    // Action buttons
+                    editBtn: document.getElementById('editBtn'),
+                    downloadPdfBtn: document.getElementById('downloadPdfBtn'),
+                    downloadDocxBtn: document.getElementById('downloadDocxBtn'),
+                    downloadTxtBtn: document.getElementById('downloadTxtBtn'),
+                    
+                    // Edit elements
+                    editActions: document.getElementById('editActions'),
+                    saveEditBtn: document.getElementById('saveEditBtn'),
+                    cancelEditBtn: document.getElementById('cancelEditBtn'),
+                    
+                    // Status message
+                    statusMessage: document.getElementById('statusMessage')
+                };
+            }
+
             initializeEventListeners() {
-                // File upload
-                const uploadArea = document.getElementById('uploadArea');
-                const fileInput = document.getElementById('fileInput');
-                
-                uploadArea.addEventListener('click', () => fileInput.click());
-                uploadArea.addEventListener('dragover', this.handleDragOver.bind(this));
-                uploadArea.addEventListener('dragleave', this.handleDragLeave.bind(this));
-                uploadArea.addEventListener('drop', this.handleDrop.bind(this));
-                fileInput.addEventListener('change', this.handleFileSelect.bind(this));
+                // File upload (using cached elements)
+                this.elements.uploadArea.addEventListener('click', () => this.elements.fileInput.click());
+                this.elements.uploadArea.addEventListener('dragover', this.handleDragOver.bind(this));
+                this.elements.uploadArea.addEventListener('dragleave', this.handleDragLeave.bind(this));
+                this.elements.uploadArea.addEventListener('drop', this.handleDrop.bind(this));
+                this.elements.fileInput.addEventListener('change', this.handleFileSelect.bind(this));
 
                 // Process button
-                // console.log('Adding processBtn event listener');
-                document.getElementById('processBtn').addEventListener('click', this.processDocument.bind(this));
+                this.elements.processBtn.addEventListener('click', this.processDocument.bind(this));
 
                 // Download buttons
-                document.getElementById('downloadPdfBtn').addEventListener('click', () => this.downloadDocument('pdf'));
-                document.getElementById('downloadDocxBtn').addEventListener('click', () => this.downloadDocument('docx'));
-                document.getElementById('downloadTxtBtn').addEventListener('click', () => this.downloadDocument('txt'));
+                this.elements.downloadPdfBtn.addEventListener('click', () => this.downloadDocument('pdf'));
+                this.elements.downloadDocxBtn.addEventListener('click', () => this.downloadDocument('docx'));
+                this.elements.downloadTxtBtn.addEventListener('click', () => this.downloadDocument('txt'));
 
                 // Edit functionality
-                document.getElementById('editBtn').addEventListener('click', this.toggleEditMode.bind(this));
-                document.getElementById('saveEditBtn').addEventListener('click', this.saveEdits.bind(this));
-                document.getElementById('cancelEditBtn').addEventListener('click', this.cancelEdits.bind(this));
+                this.elements.editBtn.addEventListener('click', this.toggleEditMode.bind(this));
+                this.elements.saveEditBtn.addEventListener('click', this.saveEdits.bind(this));
+                this.elements.cancelEditBtn.addEventListener('click', this.cancelEdits.bind(this));
             }
 
             handleDragOver(e) {
@@ -857,14 +914,14 @@
 
                 this.selectedFile = file;
                 this.displayFileInfo(file);
-                document.getElementById('processBtn').disabled = false;
+                this.elements.processBtn.disabled = false;
             }
 
             displayFileInfo(file) {
-                document.getElementById('fileName').textContent = file.name;
-                document.getElementById('fileSize').textContent = this.formatFileSize(file.size);
-                document.getElementById('fileType').textContent = file.type;
-                document.getElementById('fileInfo').style.display = 'block';
+                this.elements.fileName.textContent = file.name;
+                this.elements.fileSize.textContent = this.formatFileSize(file.size);
+                this.elements.fileType.textContent = file.type;
+                this.elements.fileInfo.style.display = 'block';
             }
 
             formatFileSize(bytes) {
@@ -876,21 +933,13 @@
             }
 
             async processDocument() {
-                // Simple frontend tracking
-                // const timestamp = new Date().toISOString();
-                // console.log(`🔴 FRONTEND CALL: processDocument at ${timestamp}`);
-                
-                // console.log('🔵 [PROCESS] processDocument called, isProcessing:', this.isProcessing);
-                // console.log('🔵 [PROCESS] Selected file:', this.selectedFile?.name);
                 if (!this.selectedFile) return;
                 
                 // Prevent duplicate processing
                 if (this.isProcessing) {
-                    // console.log('🟡 [PROCESS] Translation already in progress, ignoring duplicate request');
                     return;
                 }
                 
-                // console.log('🟢 [PROCESS] Starting new translation process');
                 this.isProcessing = true;
                 this.showProcessingState();
                 this.updateProcessingStep(1, 'complete');
@@ -921,8 +970,8 @@
             }
 
             updateProcessingStep(step, status) {
-                const icon = document.getElementById(`step${step}Icon`);
-                const text = document.getElementById(`step${step}Text`);
+                const icon = this.elements[`step${step}Icon`];
+                const text = this.elements[`step${step}Text`];
                 
                 icon.className = 'step-icon';
                 
@@ -953,9 +1002,8 @@
             }
 
             async callStreamingTranslateAPI(base64File) {
-                // console.log('🔵 [STREAM] callStreamingTranslateAPI started');
-                const targetLang = document.getElementById('targetLang').value;
-                // console.log('🔵 [STREAM] Target language:', targetLang);
+                const targetLang = this.elements.targetLang.value;
+                const modelChoice = this.elements.modelChoice.value;
                 const self = this; // Capture 'this' context for use in Promise
                 
                 return new Promise((resolve, reject) => {
@@ -966,17 +1014,16 @@
                     let targetLanguage = '';
                     
                     // Use fetch with streaming response
-                    // console.log('🔵 [FETCH] Starting fetch to /translate-stream');
                     fetch('/translate-stream', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
                             body: base64File,
                             target_lang: targetLang,
-                            template_choice: 'simplified'
+                            template_choice: 'simplified',
+                            model_choice: modelChoice
                         })
                     }).then(response => {
-                        // console.log('🟢 [FETCH] Response received, status:', response.status);
                         if (!response.ok) {
                             throw new Error('Failed to start translation stream');
                         }
@@ -1005,19 +1052,15 @@
                                             const jsonStr = line.trim().slice(6); // Remove 'data: '
                                             if (jsonStr.trim()) {
                                                 const data = JSON.parse(jsonStr);
-                                                // console.log('🟢 [STREAM] Streaming data received:', data.type, data);
                                                 self.handleStreamingData(data);
                                                 
                                                 if (data.type === 'start') {
-                                                    // console.log('🟢 [EVENT] START event - Document ID:', data.document_id);
                                                     documentId = data.document_id;
                                                 } else if (data.type === 'chunk') {
-                                                    // console.log('🟢 [EVENT] CHUNK event - Length:', data.chunk?.length, 'Total so far:', fullTranslation.length + (data.chunk?.length || 0));
                                                     fullTranslation += data.chunk;
                                                     // Update UI with streaming content
                                                     self.updateStreamingContent(fullTranslation, data);
                                                 } else if (data.type === 'final') {
-                                                    // console.log('🟢 [EVENT] FINAL event - Processing complete');
                                                     // Don't overwrite fullTranslation - use accumulated streaming content
                                                     // This prevents duplicate processing of the same document
                                                     processingTime = data.processing_time;
@@ -1025,7 +1068,6 @@
                                                     targetLanguage = data.target_language;
                                                     documentId = data.document_id;
                                                     
-                                                    // console.log('🟢 [RESOLVE] Resolving promise with fullTranslation length:', fullTranslation.length);
                                                     resolve({
                                                         success: true,
                                                         document_id: documentId,
@@ -1042,7 +1084,7 @@
                                                 }
                                             }
                                         } catch (e) {
-                                            // console.warn('Failed to parse streaming data:', line, 'Error:', e);
+                                            // Silently ignore malformed streaming data
                                         }
                                     }
                                 }
@@ -1057,22 +1099,12 @@
             }
 
             handleStreamingData(data) {
-                // console.log('Handling streaming data:', data.type);
-                
                 if (data.type === 'start') {
-                    this.showAlert('Translation started...', 'info');
+                    const modelName = this.elements.modelChoice.options[this.elements.modelChoice.selectedIndex].text;
+                    this.showAlert(`Translation started using ${modelName}...`, 'info');
                     this.updateProcessingStep(2, 'current'); // Step 2 is translation
                     // Show result panel immediately when streaming starts
                     this.showResultState();
-                    
-                    // Debug: Check if elements exist
-                    // const contentEl = document.getElementById('documentContent');
-                    // const statsEl = document.getElementById('resultStats');
-                    // console.log('UI Elements check:', {
-                    //     documentContent: !!contentEl,
-                    //     resultStats: !!statsEl,
-                    //     resultState: document.getElementById('resultState').style.display
-                    // });
                 } else if (data.type === 'chunk') {
                     // Update progress indicator
                     const progress = Math.min(95, (data.progress / 10000) * 100); // Rough progress estimate
@@ -1088,30 +1120,24 @@
             }
 
             updateStreamingContent(fullText, chunkData) {
-                // console.log('🔵 [UPDATE] updateStreamingContent called - Length:', fullText.length, 'characters');
-                
                 // Ensure result panel is visible
                 this.showResultState();
                 
                 // Update the document content area with streaming text
                 const content = this.formatDocumentText(fullText);
-                const contentElement = document.getElementById('documentContent');
                 
-                if (contentElement) {
-                    // console.log('🟢 [UPDATE] Setting innerHTML - Previous length:', contentElement.innerHTML.length, 'New length:', content.length);
-                    contentElement.innerHTML = content;
-                    // console.log('🟢 [UPDATE] Content updated in DOM successfully');
+                if (this.elements.documentContent) {
+                    this.elements.documentContent.innerHTML = content;
                 } else {
-                    console.error('❌ [UPDATE] documentContent element not found!');
+                    console.error('❌ documentContent element not found!');
                 }
                 
                 // Update stats
                 const wordCount = fullText.trim().split(/\s+/).length;
                 const charCount = fullText.length;
                 
-                const statsElement = document.getElementById('resultStats');
-                if (statsElement) {
-                    statsElement.innerHTML = `
+                if (this.elements.resultStats) {
+                    this.elements.resultStats.innerHTML = `
                         Translating... • 
                         ${wordCount.toLocaleString()} words • 
                         ${charCount.toLocaleString()} characters •
@@ -1120,8 +1146,8 @@
                 }
                 
                 // Auto-scroll to bottom to show new content
-                if (contentElement) {
-                    contentElement.scrollTop = contentElement.scrollHeight;
+                if (this.elements.documentContent) {
+                    this.elements.documentContent.scrollTop = this.elements.documentContent.scrollHeight;
                 }
             }
 
@@ -1129,16 +1155,16 @@
                 // Update any progress indicators
                 const progressText = `Translating... ${Math.round(percentage)}% (${chunkCount} chunks)`;
                 
-                // Update step status with progress
-                const translateStep = document.querySelector('[data-step="translate"] .step-text');
-                if (translateStep) {
-                    translateStep.textContent = progressText;
+                // Update step 2 text directly using cached element
+                if (this.elements.step2Text) {
+                    this.elements.step2Text.textContent = progressText;
                 }
             }
 
             // Fallback method for non-streaming translation
             async callLegacyTranslateAPI(base64File) {
-                const targetLang = document.getElementById('targetLang').value;
+                const targetLang = this.elements.targetLang.value;
+                const modelChoice = this.elements.modelChoice.value;
                 
                 const response = await fetch('/translate', {
                     method: 'POST',
@@ -1146,7 +1172,8 @@
                     body: JSON.stringify({
                         body: base64File,
                         target_lang: targetLang,
-                        template_choice: 'simplified'
+                        template_choice: 'simplified',
+                        model_choice: modelChoice
                     })
                 });
 
@@ -1164,23 +1191,14 @@
             }
 
             displayResult(response) {
-                // console.log('🔵 [DISPLAY] displayResult called');
-                // console.log('🔵 [DISPLAY] Response document length:', response.translated_document?.length);
-                
                 // DON'T overwrite content - streaming already populated it progressively
-                // This prevents the visual "double processing" effect
-                // const contentElement = document.getElementById('documentContent');
-                // console.log('🔵 [DISPLAY] Current DOM content length:', contentElement?.innerHTML?.length);
-                // console.log('🟡 [DISPLAY] NOT updating content - streaming already populated it');
-                
                 // Only update final statistics and metadata
                 const wordCount = response.translated_document.trim().split(/\s+/).length;
                 const charCount = response.translated_document.length;
                 const processingTime = response.processing_time ? `${response.processing_time.toFixed(1)}s` : '';
                 
-                // console.log('🟢 [DISPLAY] Updating final stats only');
                 // Update stats to show final completion status (remove "Translating..." indicator)
-                document.getElementById('resultStats').innerHTML = `
+                this.elements.resultStats.innerHTML = `
                     ${response.detected_language || 'Source'} → ${response.target_language || 'Target'} • 
                     ${wordCount.toLocaleString()} words • 
                     ${charCount.toLocaleString()} characters
@@ -1190,7 +1208,6 @@
                 this.originalText = response.translated_document;
                 this.showResultState(); // Ensure result panel is visible
                 this.showAlert('Translation completed successfully!', 'success');
-                // console.log('🟢 [DISPLAY] displayResult completed');
             }
 
             formatDocumentText(text) {
@@ -1215,49 +1232,40 @@
             }
 
             toggleEditMode() {
-                const content = document.getElementById('documentContent');
-                const editActions = document.getElementById('editActions');
-                
                 if (!this.isEditMode) {
                     this.isEditMode = true;
-                    content.contentEditable = true;
-                    content.classList.add('edit-mode');
-                    content.textContent = this.translatedDocument.translated_document;
-                    editActions.style.display = 'block';
-                    content.focus();
+                    this.elements.documentContent.contentEditable = true;
+                    this.elements.documentContent.classList.add('edit-mode');
+                    this.elements.documentContent.textContent = this.translatedDocument.translated_document;
+                    this.elements.editActions.style.display = 'block';
+                    this.elements.documentContent.focus();
                 } else {
                     this.cancelEdits();
                 }
             }
 
             saveEdits() {
-                const content = document.getElementById('documentContent');
-                const editActions = document.getElementById('editActions');
-                
-                this.translatedDocument.translated_document = content.textContent;
+                this.translatedDocument.translated_document = this.elements.documentContent.textContent;
                 this.isEditMode = false;
-                content.contentEditable = false;
-                content.classList.remove('edit-mode');
+                this.elements.documentContent.contentEditable = false;
+                this.elements.documentContent.classList.remove('edit-mode');
                 
-                const formatted = this.formatDocumentText(content.textContent);
-                content.innerHTML = formatted;
+                const formatted = this.formatDocumentText(this.elements.documentContent.textContent);
+                this.elements.documentContent.innerHTML = formatted;
                 
-                editActions.style.display = 'none';
+                this.elements.editActions.style.display = 'none';
                 this.showAlert('Changes saved successfully!', 'success');
             }
 
             cancelEdits() {
-                const content = document.getElementById('documentContent');
-                const editActions = document.getElementById('editActions');
-                
                 this.isEditMode = false;
-                content.contentEditable = false;
-                content.classList.remove('edit-mode');
+                this.elements.documentContent.contentEditable = false;
+                this.elements.documentContent.classList.remove('edit-mode');
                 
                 const formatted = this.formatDocumentText(this.originalText);
-                content.innerHTML = formatted;
+                this.elements.documentContent.innerHTML = formatted;
                 
-                editActions.style.display = 'none';
+                this.elements.editActions.style.display = 'none';
             }
 
             async downloadDocument(format) {
@@ -1267,7 +1275,7 @@
                 }
 
                 // Show loading state
-                const button = document.getElementById(`download${format.charAt(0).toUpperCase() + format.slice(1)}Btn`);
+                const button = this.elements[`download${format.charAt(0).toUpperCase() + format.slice(1)}Btn`];
                 const originalText = button.innerHTML;
                 button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating...';
                 button.disabled = true;
@@ -1312,15 +1320,15 @@
             }
 
             showWelcomeState() {
-                document.getElementById('welcomeState').style.display = 'block';
-                document.getElementById('processingState').style.display = 'none';
-                document.getElementById('resultState').style.display = 'none';
+                this.elements.welcomeState.style.display = 'block';
+                this.elements.processingState.style.display = 'none';
+                this.elements.resultState.style.display = 'none';
             }
 
             showProcessingState() {
-                document.getElementById('welcomeState').style.display = 'none';
-                document.getElementById('processingState').style.display = 'block';
-                document.getElementById('resultState').style.display = 'none';
+                this.elements.welcomeState.style.display = 'none';
+                this.elements.processingState.style.display = 'block';
+                this.elements.resultState.style.display = 'none';
                 
                 // Reset steps
                 for (let i = 1; i <= 3; i++) {
@@ -1329,20 +1337,19 @@
             }
 
             showResultState() {
-                document.getElementById('welcomeState').style.display = 'none';
-                document.getElementById('processingState').style.display = 'none';
-                document.getElementById('resultState').style.display = 'block';
+                this.elements.welcomeState.style.display = 'none';
+                this.elements.processingState.style.display = 'none';
+                this.elements.resultState.style.display = 'block';
             }
 
             showAlert(message, type) {
-                const statusDiv = document.getElementById('statusMessage');
-                statusDiv.className = `alert alert-${type}`;
-                statusDiv.textContent = message;
-                statusDiv.style.display = 'block';
+                this.elements.statusMessage.className = `alert alert-${type}`;
+                this.elements.statusMessage.textContent = message;
+                this.elements.statusMessage.style.display = 'block';
                 
                 if (type === 'success') {
                     setTimeout(() => {
-                        statusDiv.style.display = 'none';
+                        this.elements.statusMessage.style.display = 'none';
                     }, 5000);
                 }
             }
