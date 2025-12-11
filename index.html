@@ -297,6 +297,35 @@
             color: var(--text-primary);
         }
 
+        .streaming-indicator {
+            background: linear-gradient(90deg, var(--accent-color), var(--primary-color));
+            background-size: 200% 100%;
+            animation: shimmer 2s infinite;
+            height: 3px;
+            border-radius: 2px;
+            margin-bottom: 1rem;
+        }
+
+        @keyframes shimmer {
+            0% { background-position: -200% 0; }
+            100% { background-position: 200% 0; }
+        }
+
+        .streaming-content {
+            border-left: 3px solid var(--accent-color);
+            padding-left: 1rem;
+            margin-left: 0.5rem;
+            background: rgba(59, 130, 246, 0.05);
+            border-radius: 0 8px 8px 0;
+        }
+
+        .chunk-indicator {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            font-style: italic;
+            margin-bottom: 0.5rem;
+        }
+
         .content-panel {
             background: white;
             border-radius: 12px;
@@ -754,10 +783,12 @@
     <script>
         class EnterpriseTranslator {
             constructor() {
+                // console.log('EnterpriseTranslator constructor called');
                 this.selectedFile = null;
                 this.translatedDocument = null;
                 this.originalText = null;
                 this.isEditMode = false;
+                this.isProcessing = false; // Prevent duplicate processing
                 this.initializeEventListeners();
             }
 
@@ -773,6 +804,7 @@
                 fileInput.addEventListener('change', this.handleFileSelect.bind(this));
 
                 // Process button
+                // console.log('Adding processBtn event listener');
                 document.getElementById('processBtn').addEventListener('click', this.processDocument.bind(this));
 
                 // Download buttons
@@ -844,8 +876,22 @@
             }
 
             async processDocument() {
+                // Simple frontend tracking
+                // const timestamp = new Date().toISOString();
+                // console.log(`🔴 FRONTEND CALL: processDocument at ${timestamp}`);
+                
+                // console.log('🔵 [PROCESS] processDocument called, isProcessing:', this.isProcessing);
+                // console.log('🔵 [PROCESS] Selected file:', this.selectedFile?.name);
                 if (!this.selectedFile) return;
-
+                
+                // Prevent duplicate processing
+                if (this.isProcessing) {
+                    // console.log('🟡 [PROCESS] Translation already in progress, ignoring duplicate request');
+                    return;
+                }
+                
+                // console.log('🟢 [PROCESS] Starting new translation process');
+                this.isProcessing = true;
                 this.showProcessingState();
                 this.updateProcessingStep(1, 'complete');
 
@@ -868,6 +914,9 @@
                     console.error('Processing error:', error);
                     this.showAlert('Translation failed: ' + error.message, 'error');
                     this.showWelcomeState();
+                } finally {
+                    // Reset processing flag
+                    this.isProcessing = false;
                 }
             }
 
@@ -899,6 +948,196 @@
             }
 
             async callTranslateAPI(base64File) {
+                // Use streaming translation for better user experience
+                return this.callStreamingTranslateAPI(base64File);
+            }
+
+            async callStreamingTranslateAPI(base64File) {
+                // console.log('🔵 [STREAM] callStreamingTranslateAPI started');
+                const targetLang = document.getElementById('targetLang').value;
+                // console.log('🔵 [STREAM] Target language:', targetLang);
+                const self = this; // Capture 'this' context for use in Promise
+                
+                return new Promise((resolve, reject) => {
+                    let fullTranslation = '';
+                    let documentId = '';
+                    let processingTime = 0;
+                    let detectedLanguage = '';
+                    let targetLanguage = '';
+                    
+                    // Use fetch with streaming response
+                    // console.log('🔵 [FETCH] Starting fetch to /translate-stream');
+                    fetch('/translate-stream', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            body: base64File,
+                            target_lang: targetLang,
+                            template_choice: 'simplified'
+                        })
+                    }).then(response => {
+                        // console.log('🟢 [FETCH] Response received, status:', response.status);
+                        if (!response.ok) {
+                            throw new Error('Failed to start translation stream');
+                        }
+                        
+                        const reader = response.body.getReader();
+                        const decoder = new TextDecoder();
+                        
+                        let buffer = '';
+                        
+                        const processStream = () => {
+                            reader.read().then(({ done, value }) => {
+                                if (done) {
+                                    return;
+                                }
+                                
+                                // Add new chunk to buffer
+                                buffer += decoder.decode(value, { stream: true });
+                                
+                                // Process complete lines
+                                const lines = buffer.split('\n');
+                                buffer = lines.pop(); // Keep incomplete line in buffer
+                                
+                                for (const line of lines) {
+                                    if (line.trim().startsWith('data: ')) {
+                                        try {
+                                            const jsonStr = line.trim().slice(6); // Remove 'data: '
+                                            if (jsonStr.trim()) {
+                                                const data = JSON.parse(jsonStr);
+                                                // console.log('🟢 [STREAM] Streaming data received:', data.type, data);
+                                                self.handleStreamingData(data);
+                                                
+                                                if (data.type === 'start') {
+                                                    // console.log('🟢 [EVENT] START event - Document ID:', data.document_id);
+                                                    documentId = data.document_id;
+                                                } else if (data.type === 'chunk') {
+                                                    // console.log('🟢 [EVENT] CHUNK event - Length:', data.chunk?.length, 'Total so far:', fullTranslation.length + (data.chunk?.length || 0));
+                                                    fullTranslation += data.chunk;
+                                                    // Update UI with streaming content
+                                                    self.updateStreamingContent(fullTranslation, data);
+                                                } else if (data.type === 'final') {
+                                                    // console.log('🟢 [EVENT] FINAL event - Processing complete');
+                                                    // Don't overwrite fullTranslation - use accumulated streaming content
+                                                    // This prevents duplicate processing of the same document
+                                                    processingTime = data.processing_time;
+                                                    detectedLanguage = data.detected_language;
+                                                    targetLanguage = data.target_language;
+                                                    documentId = data.document_id;
+                                                    
+                                                    // console.log('🟢 [RESOLVE] Resolving promise with fullTranslation length:', fullTranslation.length);
+                                                    resolve({
+                                                        success: true,
+                                                        document_id: documentId,
+                                                        detected_language: detectedLanguage,
+                                                        target_language: targetLanguage,
+                                                        translated_document: fullTranslation,
+                                                        processing_time: processingTime,
+                                                        message: data.message
+                                                    });
+                                                    return;
+                                                } else if (data.type === 'error') {
+                                                    reject(new Error(data.error));
+                                                    return;
+                                                }
+                                            }
+                                        } catch (e) {
+                                            // console.warn('Failed to parse streaming data:', line, 'Error:', e);
+                                        }
+                                    }
+                                }
+                                
+                                processStream();
+                            }).catch(reject);
+                        };
+                        
+                        processStream();
+                    }).catch(reject);
+                });
+            }
+
+            handleStreamingData(data) {
+                // console.log('Handling streaming data:', data.type);
+                
+                if (data.type === 'start') {
+                    this.showAlert('Translation started...', 'info');
+                    this.updateProcessingStep(2, 'current'); // Step 2 is translation
+                    // Show result panel immediately when streaming starts
+                    this.showResultState();
+                    
+                    // Debug: Check if elements exist
+                    // const contentEl = document.getElementById('documentContent');
+                    // const statsEl = document.getElementById('resultStats');
+                    // console.log('UI Elements check:', {
+                    //     documentContent: !!contentEl,
+                    //     resultStats: !!statsEl,
+                    //     resultState: document.getElementById('resultState').style.display
+                    // });
+                } else if (data.type === 'chunk') {
+                    // Update progress indicator
+                    const progress = Math.min(95, (data.progress / 10000) * 100); // Rough progress estimate
+                    this.updateTranslationProgress(progress, data.chunk_count);
+                } else if (data.type === 'retry') {
+                    this.showAlert(`Retrying... (${data.attempt}/${data.max_retries})`, 'warning');
+                } else if (data.type === 'final') {
+                    this.updateProcessingStep(2, 'complete'); // Translation complete
+                    this.updateProcessingStep(3, 'complete'); // All done
+                } else if (data.type === 'error') {
+                    this.showAlert(`Error: ${data.error}`, 'error');
+                }
+            }
+
+            updateStreamingContent(fullText, chunkData) {
+                // console.log('🔵 [UPDATE] updateStreamingContent called - Length:', fullText.length, 'characters');
+                
+                // Ensure result panel is visible
+                this.showResultState();
+                
+                // Update the document content area with streaming text
+                const content = this.formatDocumentText(fullText);
+                const contentElement = document.getElementById('documentContent');
+                
+                if (contentElement) {
+                    // console.log('🟢 [UPDATE] Setting innerHTML - Previous length:', contentElement.innerHTML.length, 'New length:', content.length);
+                    contentElement.innerHTML = content;
+                    // console.log('🟢 [UPDATE] Content updated in DOM successfully');
+                } else {
+                    console.error('❌ [UPDATE] documentContent element not found!');
+                }
+                
+                // Update stats
+                const wordCount = fullText.trim().split(/\s+/).length;
+                const charCount = fullText.length;
+                
+                const statsElement = document.getElementById('resultStats');
+                if (statsElement) {
+                    statsElement.innerHTML = `
+                        Translating... • 
+                        ${wordCount.toLocaleString()} words • 
+                        ${charCount.toLocaleString()} characters •
+                        ${chunkData.chunk_count || 0} chunks received
+                    `;
+                }
+                
+                // Auto-scroll to bottom to show new content
+                if (contentElement) {
+                    contentElement.scrollTop = contentElement.scrollHeight;
+                }
+            }
+
+            updateTranslationProgress(percentage, chunkCount) {
+                // Update any progress indicators
+                const progressText = `Translating... ${Math.round(percentage)}% (${chunkCount} chunks)`;
+                
+                // Update step status with progress
+                const translateStep = document.querySelector('[data-step="translate"] .step-text');
+                if (translateStep) {
+                    translateStep.textContent = progressText;
+                }
+            }
+
+            // Fallback method for non-streaming translation
+            async callLegacyTranslateAPI(base64File) {
                 const targetLang = document.getElementById('targetLang').value;
                 
                 const response = await fetch('/translate', {
@@ -925,13 +1164,22 @@
             }
 
             displayResult(response) {
-                const content = this.formatDocumentText(response.translated_document);
-                document.getElementById('documentContent').innerHTML = content;
+                // console.log('🔵 [DISPLAY] displayResult called');
+                // console.log('🔵 [DISPLAY] Response document length:', response.translated_document?.length);
                 
+                // DON'T overwrite content - streaming already populated it progressively
+                // This prevents the visual "double processing" effect
+                // const contentElement = document.getElementById('documentContent');
+                // console.log('🔵 [DISPLAY] Current DOM content length:', contentElement?.innerHTML?.length);
+                // console.log('🟡 [DISPLAY] NOT updating content - streaming already populated it');
+                
+                // Only update final statistics and metadata
                 const wordCount = response.translated_document.trim().split(/\s+/).length;
                 const charCount = response.translated_document.length;
                 const processingTime = response.processing_time ? `${response.processing_time.toFixed(1)}s` : '';
                 
+                // console.log('🟢 [DISPLAY] Updating final stats only');
+                // Update stats to show final completion status (remove "Translating..." indicator)
                 document.getElementById('resultStats').innerHTML = `
                     ${response.detected_language || 'Source'} → ${response.target_language || 'Target'} • 
                     ${wordCount.toLocaleString()} words • 
@@ -940,8 +1188,9 @@
                 `;
 
                 this.originalText = response.translated_document;
-                this.showResultState();
+                this.showResultState(); // Ensure result panel is visible
                 this.showAlert('Translation completed successfully!', 'success');
+                // console.log('🟢 [DISPLAY] displayResult completed');
             }
 
             formatDocumentText(text) {

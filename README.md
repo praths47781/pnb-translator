@@ -1,30 +1,31 @@
 # Enterprise PDF Translation Service
 
-A comprehensive FastAPI-based web application that translates PDF documents using AWS Bedrock (Claude 4.5 Opus) and generates professionally formatted documents with PNB Housing Finance branding.
+A production-ready FastAPI-based web application that translates PDF documents using AWS Bedrock (Claude 4.5 Opus) with real-time streaming and generates professionally formatted documents with PNB Housing Finance branding.
 
 ## Features
 
 ### Core Translation Capabilities
-- **AI-Powered Translation**: Uses Claude 4.5 Opus for intelligent OCR extraction and English↔Hindi translation
-- **Document Structure Preservation**: Maintains headings, sections, tables, lists, and formatting hierarchy
-- **Multiple Output Formats**: Generate professional PDFs, Word documents (DOCX), and text files
-- **Professional Templates**: PNB Housing Finance branded documents with consistent enterprise styling
-- **Hindi Font Support**: Automatic font detection and registration for proper Hindi text rendering
+- **🔄 Real-Time Streaming Translation**: Live translation with Server-Sent Events showing text as it's generated
+- **🤖 AI-Powered Translation**: Uses Claude 4.5 Opus for intelligent OCR extraction and English↔Hindi translation
+- **📋 Document Structure Preservation**: Maintains headings, sections, tables, lists, and formatting hierarchy
+- **📄 Multiple Output Formats**: Generate professional PDFs, Word documents (DOCX), and text files
+- **🎨 Professional Templates**: PNB Housing Finance branded documents with consistent enterprise styling
+- **🔤 Hindi Font Support**: Automatic font detection and registration for proper Hindi text rendering
 
 ### Web Application Features
-- **Modern Web Interface**: Responsive design with drag-and-drop file upload
-- **Real-time Progress Tracking**: Visual progress indicators with step-by-step feedback
-- **In-Browser Document Editing**: Edit translated content before final download
-- **Multiple Download Options**: PDF, DOCX, and TXT formats with professional formatting
-- **Mobile Responsive**: Optimized for desktop, tablet, and mobile devices
-- **Professional UI**: PNB Housing Finance branding with modern design elements
+- **🌐 Modern Web Interface**: Responsive design with drag-and-drop file upload and real-time feedback
+- **📊 Live Progress Tracking**: Real-time streaming with visual progress indicators and chunk counters
+- **✏️ In-Browser Document Editing**: Edit translated content before final download with live preview
+- **⬇️ Multiple Download Options**: PDF, DOCX, and TXT formats with professional formatting
+- **📱 Mobile Responsive**: Optimized for desktop, tablet, and mobile devices with touch-friendly interface
+- **🎯 Professional UI**: PNB Housing Finance branding with modern design elements and animations
 
 ### Enterprise Features
-- **AWS S3 Integration**: Automatic file storage and management with metadata
-- **Comprehensive Logging**: Structured logging with request IDs and performance metrics
-- **Health Monitoring**: Built-in health checks and S3 connectivity status endpoints
-- **Error Recovery**: Retry logic with exponential backoff for API failures
-- **Performance Optimization**: Fast processing with 15-40 seconds for translation, <2 seconds for document generation
+- **☁️ AWS S3 Integration**: Automatic file storage and management with metadata and background uploads
+- **📝 Production Logging**: Optimized logging for EC2 deployment with essential error tracking only
+- **🔍 Health Monitoring**: Built-in health checks and S3 connectivity status endpoints
+- **🔄 Error Recovery**: Retry logic with exponential backoff for API failures and streaming resilience
+- **⚡ Performance Optimization**: Streaming translation (15-40s), instant document generation (<2s), memory optimized
 
 ## Prerequisites
 
@@ -94,7 +95,38 @@ Navigate to `http://localhost:8000` for the complete web application featuring:
 
 ### REST API
 
-#### Translation Endpoint: `POST /translate`
+#### Streaming Translation Endpoint: `POST /translate-stream` (Recommended)
+
+**Real-time streaming translation with Server-Sent Events for live feedback:**
+
+**Request Body (JSON):**
+```json
+{
+  "body": "base64_encoded_pdf_data",
+  "target_lang": "hi",
+  "template_choice": "simplified"
+}
+```
+
+**Response (Server-Sent Events):**
+```
+data: {"type": "start", "document_id": "stream_1234567890", "file_size_mb": 2.54, "target_lang": "hi", "status": "starting"}
+
+data: {"type": "chunk", "chunk": "# PNB Housing Finance Limited", "progress": 25, "chunk_count": 1, "status": "translating"}
+
+data: {"type": "chunk", "chunk": "\n\n**पंजीकृत कार्यालय:**", "progress": 50, "chunk_count": 2, "status": "translating"}
+
+data: {"type": "final", "success": true, "document_id": "stream_1234567890", "detected_language": "English", "target_language": "Hindi", "translated_document": "complete_translated_text", "processing_time": 25.67, "message": "Document translated successfully", "status": "complete"}
+```
+
+**Event Types:**
+- `start`: Translation begins with document metadata
+- `chunk`: Real-time translation chunks as they're generated
+- `final`: Complete translation with metadata and statistics
+- `error`: Error information if translation fails
+- `retry`: Retry attempt information
+
+#### Translation Endpoint: `POST /translate` (Legacy)
 
 **Request Body (JSON):**
 ```json
@@ -336,34 +368,44 @@ curl http://localhost:8000/s3-status
 curl -X POST http://localhost:8000/test-s3
 ```
 
-## Recent Enhancements
+## Recent Enhancements (v2.0)
 
-### AI Processing Improvements
+### 🔄 Real-Time Streaming Translation
+- **Server-Sent Events**: Live translation streaming with immediate feedback as text is generated
+- **Progress Tracking**: Real-time progress indicators with chunk counters and character counts
+- **Streaming Resilience**: Robust error handling and retry logic for streaming connections
+- **Duplicate Prevention**: Fixed retry loop issues that caused duplicate processing
+
+### 🤖 AI Processing Improvements
 - **Enhanced Claude Prompts**: Optimized prompts for complete document translation with structure preservation
-- **Increased Token Limits**: Raised to 12,000 tokens for comprehensive document processing
+- **Increased Token Limits**: Raised to 64,000 tokens for comprehensive document processing
 - **Advanced Post-Processing**: Automatic cleanup of OCR artifacts, empty sections, and formatting normalization
 - **Language Detection**: Automatic source language detection from document content
+- **Model Optimization**: Switched to Claude 4.5 Sonnet for improved performance
 
-### User Experience Enhancements
-- **Modern Web Interface**: Complete redesign with PNB Housing Finance branding
-- **Real-Time Progress**: Step-by-step progress indicators with visual feedback
-- **In-Browser Editing**: Edit translated content before final download
-- **Multiple Format Support**: PDF, DOCX, and TXT output options
-- **Mobile Responsive**: Fully optimized for desktop, tablet, and mobile devices
-- **Document Statistics**: Word count, character count, and processing time display
+### 🎨 User Experience Enhancements
+- **Real-Time Translation Display**: Live streaming text appears as it's translated
+- **Modern Web Interface**: Complete redesign with PNB Housing Finance branding and animations
+- **Progressive Enhancement**: Streaming with fallback to traditional translation
+- **In-Browser Editing**: Edit translated content before final download with live preview
+- **Multiple Format Support**: PDF, DOCX, and TXT output options with professional templates
+- **Mobile Responsive**: Fully optimized for desktop, tablet, and mobile devices with touch gestures
+- **Document Statistics**: Live word count, character count, and processing time display
 
-### Enterprise Features
-- **AWS S3 Integration**: Automatic file storage with metadata and audit trails
-- **Comprehensive Logging**: Structured logging with request IDs and performance metrics
-- **Health Monitoring**: Built-in health checks and S3 connectivity status
-- **Error Recovery**: Exponential backoff retry logic for API failures
-- **Professional Templates**: Branded document templates with consistent styling
+### 🏢 Enterprise Features
+- **Production Logging**: Optimized logging for EC2 deployment with minimal overhead
+- **AWS S3 Integration**: Background file storage with metadata and audit trails
+- **Health Monitoring**: Built-in health checks and S3 connectivity status endpoints
+- **Error Recovery**: Exponential backoff retry logic for API failures and streaming resilience
+- **Professional Templates**: Branded document templates with consistent styling and Hindi font support
 
-### Performance Optimizations
-- **Concurrent Processing**: Support for multiple simultaneous translations
+### ⚡ Performance Optimizations
+- **Streaming Architecture**: Real-time translation delivery without waiting for completion
 - **Memory Optimization**: Efficient handling of large documents and concurrent users
+- **Background Processing**: Non-blocking S3 uploads and document generation
 - **Timeout Management**: Configurable timeouts with graceful error handling
-- **Font Management**: Automatic Hindi font detection and registration
+- **Font Management**: Automatic Hindi font detection and registration for proper rendering
+- **Production Ready**: Commented debug logs, optimized for EC2 deployment
 
 ## Documentation
 

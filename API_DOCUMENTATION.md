@@ -14,7 +14,107 @@ The service uses AWS credentials for Bedrock and S3 access. No additional API au
 
 ## Endpoints
 
-### 1. Web Interface
+### 1. Streaming Translation (Recommended)
+**POST /translate-stream**
+
+Real-time streaming translation with Server-Sent Events for live feedback.
+
+**Request Body:**
+```json
+{
+  "body": "base64_encoded_pdf_data",
+  "target_lang": "hi",
+  "template_choice": "simplified"
+}
+```
+
+**Parameters:**
+- `body` (string, required): Base64 encoded PDF file data (max 15MB)
+- `target_lang` (string, required): Target language (`"hi"` for Hindi, `"en"` for English)
+- `template_choice` (string, optional): Template type (default: `"simplified"`)
+
+**Response:**
+- Content-Type: `text/event-stream`
+- Server-Sent Events stream with real-time translation chunks
+
+**Event Types:**
+
+**Start Event:**
+```
+data: {
+  "type": "start",
+  "document_id": "stream_1234567890",
+  "file_size_mb": 2.54,
+  "target_lang": "hi",
+  "status": "starting"
+}
+```
+
+**Chunk Events (Multiple):**
+```
+data: {
+  "type": "chunk",
+  "chunk": "# PNB Housing Finance Limited",
+  "progress": 25,
+  "chunk_count": 1,
+  "status": "translating"
+}
+```
+
+**Final Event:**
+```
+data: {
+  "type": "final",
+  "success": true,
+  "document_id": "stream_1234567890",
+  "detected_language": "English",
+  "target_language": "Hindi",
+  "translated_document": "complete_translated_text",
+  "processing_time": 25.67,
+  "message": "Document translated successfully",
+  "status": "complete"
+}
+```
+
+**Error Event:**
+```
+data: {
+  "type": "error",
+  "error": "Error message",
+  "processing_time": 5.23,
+  "status": "error"
+}
+```
+
+**JavaScript Example:**
+```javascript
+const eventSource = new EventSource('/translate-stream');
+eventSource.onmessage = function(event) {
+  const data = JSON.parse(event.data);
+  
+  switch(data.type) {
+    case 'start':
+      console.log('Translation started:', data.document_id);
+      break;
+    case 'chunk':
+      console.log('Received chunk:', data.chunk);
+      // Update UI with streaming content
+      break;
+    case 'final':
+      console.log('Translation complete:', data.translated_document);
+      eventSource.close();
+      break;
+    case 'error':
+      console.error('Translation error:', data.error);
+      eventSource.close();
+      break;
+  }
+};
+```
+
+---
+
+### 2. Web Interface
 **GET /**
 
 Serves the main web application interface.

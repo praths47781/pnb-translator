@@ -2,7 +2,16 @@
 
 ## Enterprise PDF Translation Service Deployment
 
-This guide covers deployment options for the PDF Translation Service in various environments.
+This guide covers deployment options for the PDF Translation Service with real-time streaming capabilities in various environments.
+
+## Production Optimizations (v2.0)
+
+### Performance Features
+- **Real-Time Streaming**: Server-Sent Events for live translation feedback
+- **Optimized Logging**: Minimal production logging for EC2 deployment
+- **Background Processing**: Non-blocking S3 uploads and document generation
+- **Memory Optimization**: Efficient handling of concurrent users and large documents
+- **Retry Logic**: Fixed duplicate processing issues with proper retry loop handling
 
 ## Prerequisites
 

@@ -15,24 +15,24 @@ README.md               # Complete setup and usage guide
 ## File Responsibilities
 
 ### `app.py` (Main Backend Application)
-- FastAPI application with comprehensive logging and CORS
-- Multiple endpoints: `/translate`, `/download`, `/health`, `/s3-status`
-- AWS Bedrock Runtime SDK integration with retry logic
-- Claude 4.5 Opus model invocation for PDF extraction and translation
-- S3 integration for file storage and management
-- Base64 file handling with 15MB size limits
-- Advanced error handling and status monitoring
-- Environment configuration (BUCKET_NAME, MODEL_ID)
+- FastAPI application with production-optimized logging and CORS
+- Multiple endpoints: `/translate-stream`, `/translate`, `/download`, `/health`, `/s3-status`
+- AWS Bedrock Runtime SDK with streaming support and fixed retry logic
+- Claude 4.5 Opus model invocation with real-time streaming capabilities
+- S3 integration with background uploads for file storage and management
+- Base64 file handling with 15MB size limits and memory optimization
+- Advanced error handling, status monitoring, and production logging
+- Environment configuration (BUCKET_NAME, MODEL_ID) optimized for EC2
 
 ### `index.html` (Complete Frontend Application)
-- Modern responsive UI with PNB Housing Finance branding
-- Drag-and-drop file upload with visual feedback
-- Real-time progress tracking with step indicators
-- Language selection (English ↔ Hindi) with visual icons
-- In-browser document editing capabilities
-- Multiple download formats (PDF, DOCX, TXT)
-- Professional styling with CSS custom properties
-- Mobile-optimized responsive design
+- Modern responsive UI with PNB Housing Finance branding and animations
+- Drag-and-drop file upload with visual feedback and real-time streaming
+- Live translation display with Server-Sent Events integration
+- Language selection (English ↔ Hindi) with visual icons and progress tracking
+- In-browser document editing capabilities with live preview
+- Multiple download formats (PDF, DOCX, TXT) with instant generation
+- Professional styling with CSS custom properties and mobile optimization
+- Production-optimized JavaScript with commented debug logs
 
 ### `pdf_generator.py` (PDF Generation Module)
 - ReportLab-based professional PDF creation
@@ -54,7 +54,24 @@ README.md               # Complete setup and usage guide
 
 ### Main Endpoints
 
-#### `POST /translate`
+#### `POST /translate-stream` (Primary)
+**Request (JSON Body):**
+```json
+{
+  "body": "base64_encoded_pdf_data",
+  "target_lang": "hi" | "en",
+  "template_choice": "simplified"
+}
+```
+
+**Response (Server-Sent Events):**
+```
+data: {"type": "start", "document_id": "stream_123", "status": "starting"}
+data: {"type": "chunk", "chunk": "translated_text", "progress": 50}
+data: {"type": "final", "translated_document": "complete_text", "status": "complete"}
+```
+
+#### `POST /translate` (Legacy)
 **Request (JSON Body):**
 ```json
 {

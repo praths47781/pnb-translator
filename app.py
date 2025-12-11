@@ -8,7 +8,7 @@ import time
 import asyncio
 from datetime import datetime
 from fastapi import FastAPI, HTTPException, BackgroundTasks
-from fastapi.responses import FileResponse, Response
+from fastapi.responses import FileResponse, Response, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional
@@ -209,6 +209,24 @@ async def test_s3_upload():
             "timestamp": datetime.now().isoformat()
         }
 
+@app.get("/test-stream")
+async def test_streaming():
+    """Test streaming functionality"""
+    async def generate_test_stream():
+        for i in range(5):
+            yield f"data: {json.dumps({'chunk': f'Test chunk {i+1}', 'count': i+1})}\n\n"
+            await asyncio.sleep(1)
+        yield f"data: {json.dumps({'type': 'final', 'message': 'Test complete'})}\n\n"
+    
+    return StreamingResponse(
+        generate_test_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive"
+        }
+    )
+
 @app.get("/test-fonts")
 async def test_font_support():
     """Test Hindi font support and availability"""
@@ -364,6 +382,107 @@ CONFIDENTIAL DOCUMENT | PNB Housing Finance Ltd.
         logger.exception(f"📋 [{request_id}] Full traceback:")
         raise HTTPException(status_code=500, detail=f"Failed to generate {request.format.upper()} document: {str(e)}")
 
+@app.post("/translate-stream")
+async def translate_pdf_stream(request: TranslateRequest, background_tasks: BackgroundTasks):
+    """Stream PDF translation with real-time progress updates"""
+    start_time = time.time()
+    request_id = f"stream_{int(time.time())}"
+    
+    async def generate_stream():
+        try:
+            # print(f"\n🔴 [BACKEND] NEW REQUEST RECEIVED - ID: {request_id}")
+            # print(f"🔴 [BACKEND] Target language: {request.target_lang}")
+            
+            # Decode base64 PDF
+            try:
+                pdf_bytes = base64.b64decode(request.body)
+                # print(f"🔴 [BACKEND] File size: {len(pdf_bytes) / (1024*1024):.2f} MB")
+            except Exception as e:
+                # print(f"❌ [BACKEND] Failed to decode PDF - ID: {request_id}")
+                yield f"data: {json.dumps({'type': 'error', 'error': 'Invalid base64 PDF data', 'status': 'error'})}\n\n"
+                return
+            
+            # Validate file size (15MB limit)
+            file_size_mb = len(pdf_bytes) / (1024 * 1024)
+            
+            if len(pdf_bytes) > 15 * 1024 * 1024:
+                yield f"data: {json.dumps({'type': 'error', 'error': f'File size exceeds 15MB limit: {file_size_mb:.2f} MB', 'status': 'error'})}\n\n"
+                return
+            
+            # Send initial status
+            # print(f"🟢 [BACKEND] STARTING PROCESSING - ID: {request_id}")
+            yield f"data: {json.dumps({'type': 'start', 'document_id': request_id, 'file_size_mb': round(file_size_mb, 2), 'target_lang': request.target_lang, 'status': 'starting'})}\n\n"
+            
+            # Schedule input PDF upload to S3 as background task
+            input_file_name = generate_file_name("input_document", request_id) + ".pdf"
+            background_tasks.add_task(
+                upload_to_s3_background,
+                file_content=pdf_bytes,
+                file_name=input_file_name,
+                folder="input",
+                request_id=request_id,
+                content_type="application/pdf"
+            )
+            
+            # Stream translation from Bedrock
+            # print(f"🟡 [BACKEND] CALLING BEDROCK STREAMING - ID: {request_id}")
+            full_translation = ""
+            async for chunk_data in bedrock_stream_translation(pdf_bytes, request.target_lang, request_id):
+                if chunk_data['type'] == 'chunk':
+                    full_translation += chunk_data['chunk']
+                
+                # Send chunk to frontend
+                yield f"data: {json.dumps(chunk_data)}\n\n"
+                
+                # No more 'complete' events - streaming ends naturally when generator finishes
+            
+            # Post-process the translation
+            cleaned_document = post_process_translation(full_translation, request_id)
+            
+            # Detect languages
+            detected_language = detect_language_from_content(cleaned_document)
+            target_language = "Hindi" if request.target_lang == "hi" else "English"
+            
+            total_time = time.time() - start_time
+            
+            # Send final result
+            # print(f"🟢 [BACKEND] PROCESSING COMPLETE - ID: {request_id}, Time: {total_time:.2f}s")
+            final_result = {
+                'type': 'final',
+                'success': True,
+                'document_id': request_id,
+                'detected_language': detected_language,
+                'target_language': target_language,
+                'translated_document': cleaned_document,
+                'processing_time': round(total_time, 2),
+                'message': "Document translated successfully",
+                'status': 'complete'
+            }
+            
+            yield f"data: {json.dumps(final_result)}\n\n"
+            # print(f"🔵 [BACKEND] FINAL RESULT SENT - ID: {request_id}")
+            
+        except Exception as e:
+            total_time = time.time() - start_time
+            error_result = {
+                'type': 'error',
+                'error': str(e),
+                'processing_time': round(total_time, 2),
+                'status': 'error'
+            }
+            yield f"data: {json.dumps(error_result)}\n\n"
+    
+    return StreamingResponse(
+        generate_stream(), 
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Headers": "*"
+        }
+    )
+
 @app.post("/translate")
 async def translate_pdf(request: TranslateRequest, background_tasks: BackgroundTasks):
     """Translate PDF document using Claude 4.5 and return translated text"""
@@ -427,6 +546,118 @@ async def translate_pdf(request: TranslateRequest, background_tasks: BackgroundT
         logger.exception(f"📋 [{request_id}] Full traceback:")
         raise HTTPException(status_code=500, detail=f"Processing error: {str(e)}")
 
+async def bedrock_stream_translation(pdf_bytes: bytes, target_lang: str, request_id: str):
+    """Stream translation from Bedrock with real-time updates"""
+    
+    # print(f"🟡 [BEDROCK] STARTING BEDROCK CALL - ID: {request_id}")
+    target_language = "Hindi" if target_lang == "hi" else "English"
+    source_language = "English" if target_lang == "hi" else "Hindi"
+    
+    # Optimized concise prompt (same as before)
+    prompt_text = f"""Translate this PDF document completely from {source_language} to {target_language}.
+
+REQUIREMENTS:
+1. Translate EVERY word from start to finish - do not stop early
+2. Preserve exact structure: headings, lists, tables, formatting
+3. Keep all numbers, dates, names, and legal terms unchanged
+4. Use markdown: # for titles, ## for sections, **bold** for emphasis
+5. Include ALL sections A-N and beyond, annexures, signatures, contact info
+
+OUTPUT: Start translation immediately. Translate the complete document including all fine print and appendices."""
+
+    content_items = [
+        {
+            "type": "text",
+            "text": prompt_text
+        },
+        {
+            "type": "document",
+            "source": {
+                "type": "base64",
+                "media_type": "application/pdf",
+                "data": base64.b64encode(pdf_bytes).decode('utf-8')
+            }
+        }
+    ]
+    
+    # Optimized Bedrock payload for streaming
+    prompt = {
+        "anthropic_version": "bedrock-2023-05-31",
+        "max_tokens": 64000,
+        "temperature": 0.05,
+        "messages": [
+            {
+                "role": "user",
+                "content": content_items
+            }
+        ]
+    }
+    
+    # Use streaming API with retry logic
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            # Use streaming invoke
+            # print(f"🟡 [BEDROCK] INVOKING MODEL - ID: {request_id}, Attempt: {attempt + 1}")
+            response = bedrock.invoke_model_with_response_stream(
+                modelId=MODEL_ID,
+                body=json.dumps(prompt),
+                contentType='application/json',
+                accept='application/json'
+            )
+            
+            # Process streaming response
+            full_translation = ""
+            chunk_count = 0
+            
+            for event in response['body']:
+                if 'chunk' in event:
+                    chunk_data = json.loads(event['chunk']['bytes'].decode())
+                    
+                    if 'delta' in chunk_data and 'text' in chunk_data['delta']:
+                        chunk_text = chunk_data['delta']['text']
+                        full_translation += chunk_text
+                        chunk_count += 1
+                        
+                        # Yield chunk to frontend
+                        yield {
+                            'type': 'chunk',
+                            'chunk': chunk_text,
+                            'progress': len(full_translation),
+                            'chunk_count': chunk_count,
+                            'status': 'translating'
+                        }
+                    
+                    elif 'stop_reason' in chunk_data:
+                        # Translation complete - just break, don't send duplicate complete event
+                        # The main function will send the final event with cleaned document
+                        break
+            
+            # SUCCESS: Break out of retry loop after successful streaming completion
+            # print(f"🟢 [BEDROCK] STREAMING COMPLETED SUCCESSFULLY - ID: {request_id}, Attempt: {attempt + 1}")
+            break
+            
+        except Exception as e:
+            error_msg = str(e)
+            
+            if attempt == max_retries - 1:  # Last attempt
+                yield {
+                    'type': 'error',
+                    'error': f"Bedrock streaming failed: {error_msg}",
+                    'status': 'error'
+                }
+                raise HTTPException(status_code=500, detail=f"Bedrock streaming error: {error_msg}")
+            else:
+                # Wait before retry
+                await asyncio.sleep(2 ** attempt)
+                yield {
+                    'type': 'retry',
+                    'attempt': attempt + 1,
+                    'max_retries': max_retries,
+                    'status': 'retrying'
+                }
+                continue
+
 async def extract_and_translate_pdf(pdf_bytes: bytes, target_lang: str, request_id: str) -> str:
     """Extract content from PDF and translate using Claude 4.5"""
     
@@ -464,7 +695,7 @@ OUTPUT: Start translation immediately. Translate the complete document including
     prompt = {
         "anthropic_version": "bedrock-2023-05-31",
         "max_tokens": 64000,  # Higher limit for complete translations
-        "temperature": 0.05,  # Lower temperature for faster, more deterministic responses
+        "temperature": 0,  # Lower temperature for faster, more deterministic responses
         "messages": [
             {
                 "role": "user",
